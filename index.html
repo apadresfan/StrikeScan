@@ -4,168 +4,72 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>StrikeScan - Bowling Tracker</title>
-
-  <!-- 1. Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
-
-  <!-- 2. React & ReactDOM -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-
-  <!-- 3. Babel Standalone for JSX -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-  <!-- 4. Lucide Icons UMD -->
-  <script src="https://unpkg.com/lucide@latest"></script>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen">
+<body class="bg-slate-900 text-slate-100 min-h-screen p-4">
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useEffect } = React;
-
-    // Fallback Icon component so missing icons never break/blue-screen the app
-    const Icon = ({ name, size = 20, className = "" }) => {
-      useEffect(() => {
-        if (window.lucide) {
-          window.lucide.createIcons();
-        }
-      }, [name]);
-      return <i data-lucide={name} style={{ width: size, height: size }} className={`inline-block ${className}`}></i>;
-    };
+    const { useState } = React;
 
     function App() {
-      const [view, setView] = useState("dashboard");
-      const [leagues, setLeagues] = useState([
-        { id: 1, name: "Tuesday Night Mixed 2025-2026", year: "2025-2026" },
-        { id: 2, name: "Thursday Commercial 2026", year: "2026" }
-      ]);
-      const [selectedLeague, setSelectedLeague] = useState(1);
-      
+      const [tab, setTab] = useState("bowlers");
       const [bowlers, setBowlers] = useState([
-        { id: 101, name: "Ronald Cook", games: 12, totalPins: 2460, avg: 205, highGame: 268, highSeries: 695 },
-        { id: 102, name: "Shanna Cook", games: 12, totalPins: 2100, avg: 175, highGame: 215, highSeries: 570 }
+        { id: 1, name: "Ronald Cook", games: 12, totalPins: 2460, avg: 205, highGame: 268 },
+        { id: 2, name: "Shanna Cook", games: 12, totalPins: 2100, avg: 175, highGame: 215 }
       ]);
 
       return (
-        <div class="min-h-screen bg-slate-900 text-slate-100 p-4 md:p-8">
-          <header class="flex justify-between items-center pb-6 border-b border-slate-800 mb-8">
-            <div class="flex items-center gap-3">
-              <div class="bg-indigo-600 p-2 rounded-lg">
-                <Icon name="trophy" size={28} className="text-white" />
-              </div>
-              <div>
-                <h1 class="text-2xl font-bold tracking-tight text-white">StrikeScan</h1>
-                <p class="text-xs text-slate-400">League & Bowler Analytics</p>
-              </div>
-            </div>
-            <select 
-              value={selectedLeague} 
-              onChange={(e) => setSelectedLeague(e.target.value)}
-              class="bg-slate-800 border border-slate-700 text-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500"
-            >
-              {leagues.map(l => (
-                <option key={l.id} value={l.id}>{l.name}</option>
-              ))}
-            </select>
+        <div class="max-w-md mx-auto space-y-6">
+          <header class="border-b border-slate-800 pb-4 text-center">
+            <h1 class="text-2xl font-bold text-indigo-400">StrikeScan</h1>
+            <p class="text-xs text-slate-400">League & Score Tracker</p>
           </header>
 
-          <nav class="flex gap-2 mb-8 bg-slate-800/60 p-1.5 rounded-xl border border-slate-800 w-fit">
+          <div class="flex gap-2 bg-slate-800 p-1 rounded-xl">
             <button 
-              onClick={() => setView("dashboard")} 
-              class={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${view === 'dashboard' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
-            >
-              <Icon name="layout-dashboard" size={16} /> Dashboard
+              onClick={() => setTab("bowlers")}
+              class={`flex-1 py-2 text-xs font-semibold rounded-lg ${tab === 'bowlers' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>
+              Bowler Stats
             </button>
             <button 
-              onClick={() => setView("stats")} 
-              class={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${view === 'stats' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
-            >
-              <Icon name="bar-chart-3" size={16} /> Bowler Stats
+              onClick={() => setTab("ocr")}
+              class={`flex-1 py-2 text-xs font-semibold rounded-lg ${tab === 'ocr' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>
+              Scan Scoreboard
             </button>
-            <button 
-              onClick={() => setView("ocr")} 
-              class={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${view === 'ocr' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
-            >
-              <Icon name="camera" size={16} /> Scan Scoreboard
-            </button>
-          </nav>
+          </div>
 
-          <main class="space-y-6">
-            {view === 'dashboard' && (
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div class="bg-slate-800/80 p-6 rounded-2xl border border-slate-700/50">
-                  <span class="text-slate-400 text-sm">Active League</span>
-                  <p class="text-xl font-bold mt-1 text-indigo-400">
-                    {leagues.find(l => l.id == selectedLeague)?.name}
-                  </p>
+          {tab === 'bowlers' && (
+            <div class="bg-slate-800 rounded-xl p-4 space-y-3">
+              <h2 class="text-sm font-bold text-slate-300">League Averages</h2>
+              {bowlers.map(b => (
+                <div key={b.id} class="flex justify-between items-center bg-slate-900 p-3 rounded-lg border border-slate-700/50">
+                  <div>
+                    <p class="font-bold text-sm text-white">{b.name}</p>
+                    <p class="text-xs text-slate-400">{b.games} games • High: {b.highGame}</p>
+                  </div>
+                  <div class="text-right">
+                    <span class="text-xs text-slate-400">AVG</span>
+                    <p class="text-lg font-extrabold text-emerald-400">{b.avg}</p>
+                  </div>
                 </div>
-                <div class="bg-slate-800/80 p-6 rounded-2xl border border-slate-700/50">
-                  <span class="text-slate-400 text-sm">League Bowlers</span>
-                  <p class="text-3xl font-bold mt-1">{bowlers.length}</p>
-                </div>
-                <div class="bg-slate-800/80 p-6 rounded-2xl border border-slate-700/50">
-                  <span class="text-slate-400 text-sm">Top Average</span>
-                  <p class="text-3xl font-bold mt-1 text-emerald-400">
-                    {Math.max(...bowlers.map(b => b.avg))}
-                  </p>
-                </div>
-              </div>
-            )}
+              ))}
+            </div>
+          )}
 
-            {view === 'stats' && (
-              <div class="bg-slate-800/80 rounded-2xl border border-slate-700/50 overflow-hidden">
-                <div class="p-6 border-b border-slate-700/50 flex justify-between items-center">
-                  <h2 class="text-lg font-bold">Bowler Statistics</h2>
-                  <button class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-3 py-2 rounded-lg flex items-center gap-1.5 font-medium">
-                    <Icon name="user-plus" size={14} /> Add Bowler
-                  </button>
-                </div>
-                <div class="overflow-x-auto">
-                  <table class="w-full text-left text-sm">
-                    <thead class="bg-slate-900/50 text-slate-400 border-b border-slate-700/50">
-                      <tr>
-                        <th class="p-4 font-semibold">Bowler Name</th>
-                        <th class="p-4 font-semibold">Games</th>
-                        <th class="p-4 font-semibold">Total Pins</th>
-                        <th class="p-4 font-semibold">Average</th>
-                        <th class="p-4 font-semibold">High Game</th>
-                        <th class="p-4 font-semibold">High Series</th>
-                      </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-700/30">
-                      {bowlers.map(b => (
-                        <tr key={b.id} class="hover:bg-slate-700/20 transition">
-                          <td class="p-4 font-medium text-white">{b.name}</td>
-                          <td class="p-4 text-slate-300">{b.games}</td>
-                          <td class="p-4 text-slate-300">{b.totalPins}</td>
-                          <td class="p-4 font-semibold text-emerald-400">{b.avg}</td>
-                          <td class="p-4 text-slate-300">{b.highGame}</td>
-                          <td class="p-4 text-slate-300">{b.highSeries}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {view === 'ocr' && (
-              <div class="bg-slate-800/80 p-8 rounded-2xl border border-slate-700/50 text-center max-w-xl mx-auto">
-                <div class="w-16 h-16 bg-indigo-600/20 text-indigo-400 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Icon name="upload-cloud" size={32} />
-                </div>
-                <h2 class="text-xl font-bold mb-2">Upload Scoreboard Image</h2>
-                <p class="text-sm text-slate-400 mb-6">
-                  Snap a photo of the 3-game overhead monitor or paper sheet to automatically scan scores.
-                </p>
-                <label class="cursor-pointer inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-5 py-2.5 rounded-xl transition">
-                  <Icon name="image" size={18} /> Choose Scoreboard Photo
-                  <input type="file" class="hidden" accept="image/*" />
-                </label>
-              </div>
-            )}
-          </main>
+          {tab === 'ocr' && (
+            <div class="bg-slate-800 rounded-xl p-6 text-center space-y-4">
+              <h2 class="text-base font-bold text-white">Upload Scoreboard Photo</h2>
+              <p class="text-xs text-slate-400">Take a direct picture of the overhead monitor from your phone camera.</p>
+              <label class="block w-full bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold py-3 rounded-xl cursor-pointer">
+                📷 Take Photo or Select File
+                <input type="file" class="hidden" accept="image/*" />
+              </label>
+            </div>
+          )}
         </div>
       );
     }
