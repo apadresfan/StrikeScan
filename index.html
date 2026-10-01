@@ -17,23 +17,147 @@
 
     function App() {
       const [tab, setTab] = useState("bowlers");
-      const [bowlers, setBowlers] = useState([
-        { id: 1, name: "Ronald Cook", games: 12, totalPins: 2460, avg: 205, highGame: 268 },
-        { id: 2, name: "Shanna Cook", games: 12, totalPins: 2100, avg: 175, highGame: 215 }
-      ]);
+      
+      // Blank initial states
+      const [leagues, setLeagues] = useState([]);
+      const [selectedLeagueId, setSelectedLeagueId] = useState("");
+      const [bowlers, setBowlers] = useState([]);
+
+      // Form input states
+      const [newLeagueName, setNewLeagueName] = useState("");
+      const [newLeagueYear, setNewLeagueYear] = useState(new Date().getFullYear().toString());
+      const [showAddLeague, setShowAddLeague] = useState(false);
+
+      const [newBowlerName, setNewBowlerName] = useState("");
+      const [showAddBowler, setShowAddBowler] = useState(false);
+
+      // Add a new league
+      const handleAddLeague = (e) => {
+        e.preventDefault();
+        if (!newLeagueName.trim()) return;
+
+        const newLeague = {
+          id: Date.now().toString(),
+          name: newLeagueName.trim(),
+          year: newLeagueYear.trim()
+        };
+
+        setLeagues([...leagues, newLeague]);
+        setSelectedLeagueId(newLeague.id);
+        setNewLeagueName("");
+        setShowAddLeague(false);
+      };
+
+      // Add a new bowler
+      const handleAddBowler = (e) => {
+        e.preventDefault();
+        if (!newBowlerName.trim() || !selectedLeagueId) return;
+
+        const newBowler = {
+          id: Date.now().toString(),
+          leagueId: selectedLeagueId,
+          name: newBowlerName.trim(),
+          games: 0,
+          totalPins: 0,
+          avg: 0,
+          highGame: 0,
+          highSeries: 0
+        };
+
+        setBowlers([...bowlers, newBowler]);
+        setNewBowlerName("");
+        setShowAddBowler(false);
+      };
+
+      // Filter bowlers by selected league
+      const currentBowlers = bowlers.filter(b => b.leagueId === selectedLeagueId);
 
       return (
-        <div class="max-w-md mx-auto space-y-6">
-          <header class="border-b border-slate-800 pb-4 text-center">
-            <h1 class="text-2xl font-bold text-indigo-400">StrikeScan</h1>
-            <p class="text-xs text-slate-400">League & Score Tracker</p>
+        <div class="max-w-md mx-auto space-y-5">
+          {/* Header */}
+          <header class="border-b border-slate-800 pb-3 flex justify-between items-center">
+            <div>
+              <h1 class="text-2xl font-bold text-indigo-400">StrikeScan</h1>
+              <p class="text-xs text-slate-400">League & Score Tracker</p>
+            </div>
+            <button 
+              onClick={() => setShowAddLeague(!showAddLeague)}
+              class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg">
+              + New League
+            </button>
           </header>
 
+          {/* Add League Form Modal/Panel */}
+          {showAddLeague && (
+            <form onSubmit={handleAddLeague} class="bg-slate-800 p-4 rounded-xl border border-slate-700 space-y-3">
+              <h3 class="text-sm font-bold text-white">Create New League</h3>
+              <div>
+                <label class="text-xs text-slate-400 block mb-1">League Name</label>
+                <input 
+                  type="text" 
+                  required
+                  placeholder="e.g. Tuesday Night Mixed"
+                  value={newLeagueName}
+                  onChange={(e) => setNewLeagueName(e.target.value)}
+                  class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label class="text-xs text-slate-400 block mb-1">Season / Year</label>
+                <input 
+                  type="text" 
+                  required
+                  value={newLeagueYear}
+                  onChange={(e) => setNewLeagueYear(e.target.value)}
+                  class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div class="flex gap-2 justify-end pt-1">
+                <button 
+                  type="button" 
+                  onClick={() => setShowAddLeague(false)}
+                  class="px-3 py-1.5 text-xs text-slate-400 hover:text-white">
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg">
+                  Save League
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* League Selector */}
+          {leagues.length > 0 ? (
+            <div class="bg-slate-800/60 p-3 rounded-xl border border-slate-800">
+              <label class="text-xs text-slate-400 block mb-1 font-semibold">Active League</label>
+              <select 
+                value={selectedLeagueId}
+                onChange={(e) => setSelectedLeagueId(e.target.value)}
+                class="w-full bg-slate-900 border border-slate-700 text-white text-sm rounded-lg p-2 focus:outline-none">
+                {leagues.map(l => (
+                  <option key={l.id} value={l.id}>{l.name} ({l.year})</option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div class="bg-slate-800/40 p-4 rounded-xl border border-dashed border-slate-700 text-center">
+              <p class="text-xs text-slate-400 mb-2">No leagues created yet.</p>
+              <button 
+                onClick={() => setShowAddLeague(true)}
+                class="text-xs font-semibold text-indigo-400 underline">
+                + Create your first league
+              </button>
+            </div>
+          )}
+
+          {/* Navigation Tabs */}
           <div class="flex gap-2 bg-slate-800 p-1 rounded-xl">
             <button 
               onClick={() => setTab("bowlers")}
               class={`flex-1 py-2 text-xs font-semibold rounded-lg ${tab === 'bowlers' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>
-              Bowler Stats
+              Bowlers & Stats
             </button>
             <button 
               onClick={() => setTab("ocr")}
@@ -42,30 +166,88 @@
             </button>
           </div>
 
+          {/* Tab Content: Bowlers */}
           {tab === 'bowlers' && (
-            <div class="bg-slate-800 rounded-xl p-4 space-y-3">
-              <h2 class="text-sm font-bold text-slate-300">League Averages</h2>
-              {bowlers.map(b => (
-                <div key={b.id} class="flex justify-between items-center bg-slate-900 p-3 rounded-lg border border-slate-700/50">
-                  <div>
-                    <p class="font-bold text-sm text-white">{b.name}</p>
-                    <p class="text-xs text-slate-400">{b.games} games • High: {b.highGame}</p>
+            <div class="space-y-4">
+              <div class="flex justify-between items-center">
+                <h2 class="text-sm font-bold text-slate-300">Roster & Averages</h2>
+                {selectedLeagueId && (
+                  <button 
+                    onClick={() => setShowAddBowler(!showAddBowler)}
+                    class="bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 hover:bg-indigo-600/50 text-xs font-semibold px-2.5 py-1.5 rounded-lg">
+                    + Add Bowler
+                  </button>
+                )}
+              </div>
+
+              {/* Add Bowler Form */}
+              {showAddBowler && selectedLeagueId && (
+                <form onSubmit={handleAddBowler} class="bg-slate-800 p-4 rounded-xl border border-slate-700 space-y-3">
+                  <h3 class="text-sm font-bold text-white">Add Bowler to League</h3>
+                  <input 
+                    type="text" 
+                    required
+                    placeholder="Bowler Name"
+                    value={newBowlerName}
+                    onChange={(e) => setNewBowlerName(e.target.value)}
+                    class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                  />
+                  <div class="flex gap-2 justify-end">
+                    <button 
+                      type="button" 
+                      onClick={() => setShowAddBowler(false)}
+                      class="px-3 py-1.5 text-xs text-slate-400 hover:text-white">
+                      Cancel
+                    </button>
+                    <button 
+                      type="submit" 
+                      class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg">
+                      Save Bowler
+                    </button>
                   </div>
-                  <div class="text-right">
-                    <span class="text-xs text-slate-400">AVG</span>
-                    <p class="text-lg font-extrabold text-emerald-400">{b.avg}</p>
-                  </div>
+                </form>
+              )}
+
+              {/* Bowler List */}
+              {!selectedLeagueId ? (
+                <div class="bg-slate-800/30 p-6 rounded-xl text-center text-xs text-slate-500">
+                  Select or create a league above to manage bowlers.
                 </div>
-              ))}
+              ) : currentBowlers.length === 0 ? (
+                <div class="bg-slate-800/30 p-6 rounded-xl text-center space-y-2">
+                  <p class="text-xs text-slate-400">No bowlers added to this league yet.</p>
+                  <button 
+                    onClick={() => setShowAddBowler(true)}
+                    class="text-xs font-semibold text-indigo-400 underline">
+                    + Add first bowler
+                  </button>
+                </div>
+              ) : (
+                <div class="space-y-2">
+                  {currentBowlers.map(b => (
+                    <div key={b.id} class="flex justify-between items-center bg-slate-800 p-3.5 rounded-xl border border-slate-700/50">
+                      <div>
+                        <p class="font-bold text-sm text-white">{b.name}</p>
+                        <p class="text-xs text-slate-400">{b.games} games • High: {b.highGame || '-'}</p>
+                      </div>
+                      <div class="text-right">
+                        <span class="text-[10px] text-slate-400 uppercase tracking-wider">AVG</span>
+                        <p class="text-lg font-extrabold text-emerald-400">{b.avg || 0}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
+          {/* Tab Content: OCR / Scoreboard Scan */}
           {tab === 'ocr' && (
-            <div class="bg-slate-800 rounded-xl p-6 text-center space-y-4">
+            <div class="bg-slate-800 rounded-xl p-6 text-center space-y-4 border border-slate-700/50">
               <h2 class="text-base font-bold text-white">Upload Scoreboard Photo</h2>
-              <p class="text-xs text-slate-400">Take a direct picture of the overhead monitor from your phone camera.</p>
-              <label class="block w-full bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold py-3 rounded-xl cursor-pointer">
-                📷 Take Photo or Select File
+              <p class="text-xs text-slate-400">Take a photo of the overhead monitor on league night to record scores.</p>
+              <label class="block w-full bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold py-3 rounded-xl cursor-pointer shadow-lg transition">
+                📷 Take Photo / Choose File
                 <input type="file" class="hidden" accept="image/*" />
               </label>
             </div>
