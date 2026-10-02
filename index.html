@@ -111,11 +111,16 @@
             <h2>Scoreboard Photo OCR</h2>
             <p class="muted">Upload or take a photo. The site reads it locally in your browser, then lets you review every frame before saving.</p>
           </div>
-          <span class="badge beta">OCR v5</span>
+          <span class="badge beta">OCR v6</span>
         </div>
         <label>Scoreboard style<select id="ocrMode"><option value="digital">Digital grid — turquoise, blue or pink</option><option value="standard">Other display — standard OCR</option></select></label><label>Game shown in this photo<select id="ocrGame"><option value="1">Game 1</option><option value="2">Game 2</option><option value="3">Game 3</option></select></label><p class="muted small">Use one game per photo. Include only your team, its bowler names, and all 10 frames.</p>
         <input id="scoreboardImage" type="file" accept="image/*" capture="environment" />
         <div id="imagePreviewWrap" class="hidden"><img id="imagePreview" alt="Scoreboard preview" /></div>
+        <div class="row wrap">
+          <label>Brightness <output id="brightnessValue">+0</output><input id="ocrBrightness" type="range" min="-40" max="40" value="0" step="5"></label>
+          <label>Contrast <output id="contrastValue">1.00×</output><input id="ocrContrast" type="range" min="0.7" max="1.8" value="1" step="0.05"></label>
+          <button id="resetPhotoAdjustments" class="ghost">Reset photo settings</button>
+        </div><p class="muted small">Try contrast around 1.25× first. Click Read Scoreboard after changing settings. Extra contrast is also tried automatically for missing marks.</p>
         <div class="row wrap">
           <button id="runOcrBtn" class="primary">Read Scoreboard</button>
           <button id="applyOcrBtn" class="ghost" disabled>Apply OCR to Score Sheet</button>
@@ -182,6 +187,6 @@
   <div id="toast" class="toast" role="status"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-  <script src="app.js?v=20261002-ocr5"></script>
+  <script src="app.js?v=20261002-ocr6"></script>
 </body>
 </html>
