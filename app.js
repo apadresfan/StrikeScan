@@ -104,14 +104,96 @@ async function prepareScoreboard(file,enhance){
   return canvas;
  }finally{URL.revokeObjectURL(url);}
 }
+// Digital turquoise scoreboard font samples; unknown glyphs stay blank for review.
+const GRID_FONT=[{"char":"1","mask":"000000011110000000000011111000000001111111100000000111111110000011111111111000000110111111100000000001111110000000000111111000000000011111100000000001111110000000000111111000000000011111100000000001111110000000000111111000000000011111100000000001111110000000000111111000000000011111100000000001111110000000000111111000000000011111100000000011111110000011111111111111111111111111111110","aspect":0.4146341463414634},{"char":"2","mask":"001111111111110001111111111111101111000000001111011100000000111100000000000011110000000000001111000000000001111100000000000111100000000001111100000000001111100000000001111100000000001111100000000011111000000000011111000000000011111000000000011111000000000001111000000000000111100000000000011110000000000001111000000000000111100000000000011110000000000001111111111111100111111111111110","aspect":0.6585365853658537},{"char":"3","mask":"000111111111100001111111111111100111100000001111011100000000111100000000000011110000000000001111000000000000111100000000000011110000000000001111000000000011111000000001111111000000000111111110000000000001111000000000000011110000000000001111000000000000111100000000000011110000000000001111000000000000111100000000000011111111100000001111011110000000111000111111111111100001111111111000","aspect":0.6341463414634146},{"char":"4","mask":"000000000000110000000000001111000000000001101100000000001100110000000001100001000000001110000100000001111100110000001111010011000011111001101100011111000111110001111000011111001111100001111100111110000111110011111111111111111111111111111111011111111111111100000000011111000000000001111100000000000111110000000000011111000000000001111100000000000111110000000000011111000000000001111100","aspect":0.6585365853658537},{"char":"5","mask":"111111111111111011111111111111101111000000000000111100000000000011110000000000001111000000000000111100000000000011110000000000001111000000000000111100000000000011111111111111001111111111111110000000000001111000000000000011110000000000001111000000000000111100000000000011110000000000001111000000000000111111110000000011111111000000001111011110000001111000111111111111000001111111110000","aspect":0.6428571428571429},{"char":"6","mask":"001111111111110001111111111111100111100000001111011110000000111111111000000000000111100000000000111110000000000011111000000000001111100000000000111111111111100011111111111111001111111111111110111110000000111111111000000011111111100000001111111110000000111111111000000011111111100000001111111110000000111111111000000011110111100000001111011110000001111000111111111111000000111111111000","aspect":0.6585365853658537},{"char":"7","mask":"111111111111111111111111111111110000000000001111000000000000111100000000000011110000000000001111000000000000111100000000000011110000000000001111000000000001111000000000011111000000000011111000000000001111000000000001111000000000011110000000000011110000000000111111000000000011111000000000001111100000000000111110000000000011111000000000001111100000000000111110000000000011111000000000","aspect":0.6428571428571429},{"char":"8","mask":"000111111111100000111111111111101111100000001110111100000000111011110000000011101111000000001110111100000000111011110000000011101111000000001110011111111111111000111111111111000011111111111100011110000001111011110000000011111111000000001111111100000000111111110000000011111111000000001111111100000000111111110000000011111111100000001110011110000001111000111111111111000001111111111000","aspect":0.6341463414634146},{"char":"9","mask":"001111111111110001111111111111101111000000001111111100000000111111110000000011111111000000001111111100000000111111110000000011111111000000001111111100000000111111110000000011110111111111111111001111111111111100001111111111110000000000001111000000000000111100000000000011110000000000001111000000000000111100110000000011111111100000011111011110000001111001111111111111000001111111111000","aspect":0.6585365853658537},{"char":"-","mask":"111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111","aspect":6.25},{"char":"/","mask":"000000000000011100000000000001110000000000001111000000000011110000000000001111000000000000111100000000000011110000000000001110000000000111110000000000011110000000000001111100000000000111000000000001111000000000001111100000000000111100000000000011110000000000011100000000000001110000000000001111000000000000111100000000000011110000000000111100000000000011100000000000001110000000000000","aspect":0.6578947368421053},{"char":"X","mask":"111100000000111111110000000011111111000000001111011100000000111000111100001111000011110000111100001111000011110000111100001111000011110000111100000111000011110000001111111100000000011111110000000001111111000000001111111100000011110000111100001111000011110000111100001111000011110000111100001111000011110000111100001111001111000000001110111100000000111111110000000011111111000000001111","aspect":0.625},{"char":"0","mask":"000000011111000000000011111110000000111110111100000011110001111000011111000111100001111000001111000111100000111100011110000011110001110000001111000111000000111100011100000011110001110000001111000111000000111100011100000011110001110000001111000111000000111100011100000011110001110000001111000111100000111100011110000011110001111000001111000011110001111000001111001111100000011111111100","aspect":0.8461538461538461}];
+
+function readDigitalGrid(data,w,h){
+ const lit=(x,y)=>{const i=(y*w+x)*4;return data[i+1]>110&&data[i+2]>110&&data[i]<data[i+1]*.85};
+ function groups(values){const groups=[];for(const v of values){if(!groups.length||v>groups[groups.length-1].at(-1)+1)groups.push([v]);else groups.at(-1).push(v);}return groups.map(g=>(g[0]+g.at(-1))/2);}
+ const yHits=[];
+ for(let y=0;y<h;y++){let n=0;for(let x=Math.round(w*.02);x<w*.98;x++)if(lit(x,y))n++;if(n>w*.96*.70)yHits.push(y);}
+ const ys=groups(yHits);let columns,header;
+ for(let i=0;i<ys.length-2;i++){
+  const span=ys[i+1]-ys[i],next=ys[i+2]-ys[i+1];
+  if(span<20*h/775||span>next*.65)continue;
+  const hits=[],a=Math.ceil(ys[i]+4),b=Math.floor(ys[i+2]-4);
+  for(let x=0;x<w;x++){let n=0;for(let y=a;y<=b;y++)if(lit(x,y))n++;if(n>(b-a+1)*.92)hits.push(x);}
+  const xs=groups(hits);
+  if(xs.length===13){columns=xs;header=i;break;}
+ }
+ if(!columns)throw new Error('Grid not found. This reader needs the turquoise display shown in your sample, photographed straight on with the full grid visible. Try standard OCR for other displays.');
+ const frameEdges=columns.slice(1,-1),rows=[];
+ for(let r=header+1;r<ys.length-1;r++){
+  const top=ys[r],bottom=ys[r+1],height=bottom-top;
+  if(height<(ys[header+2]-ys[header+1])*.7)break;
+  const middle=Math.round((top+bottom)/2),left=Math.round(columns[1]);
+  if(![-2,-1,0,1,2].some(dx=>lit(left+dx,middle)))break;
+  const frames=[];
+  for(let f=0;f<10;f++){
+   const scale=w/1338,x0=Math.round(frameEdges[f])+Math.max(3,Math.round(5*scale)),x1=Math.round(frameEdges[f+1])-Math.max(3,Math.round(4*scale));
+   const y0=Math.round(top)+Math.max(3,Math.round(6*scale)),y1=Math.round(top+height*.43)-Math.max(2,Math.round(3*scale));
+   const runs=[];
+   for(let x=x0;x<x1;x++){
+    let n=0;for(let y=y0;y<y1;y++)if(lit(x,y))n++;
+    if(n){if(!runs.length||x>runs.at(-1).at(-1)+1)runs.push([x]);else runs.at(-1).push(x);}
+   }
+   let marks='',uncertain=false;
+   for(const run of runs){
+    if(run.length<=8*scale)continue;
+    const a=run[0],b=run.at(-1)+1;let c=y1,d=y0;
+    for(let y=y0;y<y1;y++)for(let x=a;x<b;x++)if(lit(x,y)){c=Math.min(c,y);d=Math.max(d,y+1);}
+    if(d<=c)continue;
+    let mask='';
+    for(let yy=0;yy<24;yy++)for(let xx=0;xx<16;xx++)mask+=lit(Math.min(b-1,a+Math.floor((xx+.5)*(b-a)/16)),Math.min(d-1,c+Math.floor((yy+.5)*(d-c)/24)))?'1':'0';
+    const aspect=(b-a)/(d-c);
+    let best=null;
+    for(const t of GRID_FONT){
+     let differences=0;for(let i=0;i<mask.length;i++)if(mask[i]!==t.mask[i])differences++;
+     const error=differences/mask.length+Math.min(.4,Math.abs(Math.log(aspect/t.aspect))*.15);
+     if(!best||error<best.error)best={char:t.char,error};
+    }
+    if(best.error>.28){uncertain=true;break;}marks+=best.char;
+   }
+   frames.push(!uncertain&&parseFrame(marks,f)!==null?marks:'');
+  }
+  rows.push({bowlerId:'',name:'Scoreboard row '+(rows.length+1),line:'Assign this row to a bowler; check all frame marks.',frames});
+ }
+ if(!rows.length)throw new Error('No bowler rows found in this grid.');
+ return rows;
+}
+function renderOcrReview(rows,grid){
+ $('#ocrDetected').innerHTML=rows.map((r,i)=>'<div class="game-block"><strong>'+esc(r.name)+'</strong>'+
+ (grid?'<label>Bowler<select data-ocr-row="'+i+'"><option value="">Choose bowler for this row</option>'+currentTeam().bowlers.map(b=>'<option value="'+b.id+'">'+esc(b.name)+'</option>').join('')+'</select></label>':'')+
+ '<p class="muted small">'+esc(r.line)+'</p><div class="row wrap">'+r.frames.map((f,fi)=>'<label>Frame '+(fi+1)+'<input data-ocr-frame="'+i+':'+fi+'" value="'+esc(f)+'" maxlength="3" style="width:65px"></label>').join('')+'</div></div>').join('');
+ $('[data-ocr-row]').forEach(el=>el.onchange=()=>{const row=ocrResult.rows[+el.dataset.ocrRow];row.bowlerId=el.value;updateOcrApply();});
+ $('[data-ocr-frame]').forEach(el=>el.oninput=()=>{const [r,f]=el.dataset.ocrFrame.split(':').map(Number);ocrResult.rows[r].frames[f]=normalizeFrame(el.value);updateOcrApply();});
+ updateOcrApply();
+}
+function updateOcrApply(){
+ const valid=ocrResult?.rows.filter(r=>r.bowlerId&&bowlingScore(r.frames)!==null)||[];
+ const ids=valid.map(r=>r.bowlerId);
+ $('#applyOcrBtn').disabled=!valid.length||new Set(ids).size!==ids.length;
+}
+
 async function runOcr(){
  const file=$('#scoreboardImage').files[0],team=currentTeam();
  if(!file)return toast('Choose a scoreboard photo first');
  if(!team?.bowlers.length)return toast('Select a team and add its bowlers first');
- if(!window.Tesseract){$('#ocrStatus').textContent='The OCR download did not load. Connect to the internet and reload this page.';return;}
+ if($('#ocrMode').value!=='digital'&&!window.Tesseract){$('#ocrStatus').textContent='The OCR download did not load. Connect to the internet and reload this page.';return;}
  const teamId=team.id,game=+$('#ocrGame').value;let worker;
  ocrResult=null;$('#applyOcrBtn').disabled=true;$('#ocrProgress').classList.remove('hidden');$('#ocrDetails').classList.add('hidden');$('#runOcrBtn').disabled=true;$('#ocrStatus').textContent='Loading the OCR engine…';
  try{
+  if($('#ocrMode').value==='digital'){
+   const original=await prepareScoreboard(file,false),ctx=original.getContext('2d');
+   const rows=readDigitalGrid(ctx.getImageData(0,0,original.width,original.height).data,original.width,original.height);
+   if(currentTeam()?.id!==teamId)throw new Error('The selected team changed. Read this photo again.');
+   ocrResult={text:'Digital grid reader: each frame read separately.',rows,teamId,game};
+   $('#ocrText').textContent=ocrResult.text;
+   renderOcrReview(rows,true);
+   $('#ocrDetails').classList.remove('hidden');$('#ocrDetails').open=true;
+   $('#ocrStatus').textContent='Read '+rows.length+' scoreboard rows. Assign each row to a bowler and correct any blank or incorrect marks before applying Game '+game+'.';
+   return;
+  }
   worker=await Tesseract.createWorker('eng',1,{logger:m=>{
    $('#ocrStatus').textContent=m.status==='recognizing text'?'Reading scoreboard… '+Math.round((m.progress||0)*100)+'%':m.status;
    $('#ocrProgressBar').style.width=Math.round((m.progress||0)*100)+'%';
@@ -129,9 +211,9 @@ async function runOcr(){
   if(currentTeam()?.id!==teamId)throw new Error('The selected team changed. Select the correct team and read this photo again.');
   ocrResult={text,rows,teamId,game};
   $('#ocrText').textContent=text||'No text was recognized.';
-  $('#ocrDetected').innerHTML=rows.map(r=>'<div class="bowler"><div><strong>'+esc(r.name)+'</strong><div class="muted small">'+esc(r.line)+'</div></div><div>'+(r.frames.length?r.frames.map(esc).join(' · '):'No complete frame row detected')+'</div></div>').join('');
+  renderOcrReview(rows,false);
   $('#ocrDetails').classList.remove('hidden');$('#ocrDetails').open=true;
-  const count=rows.filter(r=>r.frames.length===10).length;
+  const count=rows.filter(r=>bowlingScore(r.frames)!==null).length;
   $('#applyOcrBtn').disabled=count===0;
   $('#ocrStatus').textContent=count?'Read '+count+' bowler rows for Game '+game+'. Review the marks before applying.':'Text was read, but no complete frame rows could be safely identified. Photograph only your team, straight on, with names and all 10 frames visible. Open the OCR text below to see what was read.';
  }catch(e){console.error(e);$('#ocrStatus').textContent='OCR could not finish: '+(e.message||'Check your internet connection and try a JPG or PNG photo.');}
@@ -139,12 +221,13 @@ async function runOcr(){
 }
 function applyOcr(){
  if(!ocrResult||!nightDraft)return;
+ if($('#applyOcrBtn').disabled)return;
  if(ocrResult.teamId!==currentTeam()?.id)return toast('Read the photo again for this team');
  const game=nightDraft.games.find(g=>g.game===ocrResult.game);
  if(!game)return;
  if(game.bowlers.some(b=>b.frames.some(Boolean))&&!confirm('Replace detected bowlers’ marks in Game '+game.game+'?'))return;
  let filled=0;
- for(const row of ocrResult.rows){if(row.frames.length!==10)continue;const b=game.bowlers.find(b=>b.bowlerId===row.bowlerId);if(b){b.frames=[...row.frames];filled+=10;}}
+ for(const row of ocrResult.rows){if(!row.bowlerId||bowlingScore(row.frames)===null)continue;const b=game.bowlers.find(b=>b.bowlerId===row.bowlerId);if(b){b.frames=[...row.frames];filled+=10;}}
  renderScoreSheet();toast('Applied '+filled+' frame marks to Game '+game.game+'. Verify before saving.');
 }
 function exportBackup(){const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`bowling-tracker-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(a.href)}
