@@ -106,8 +106,52 @@ function renderDashboard(){
  $('#highScores').innerHTML=highs.length?highs.map(e=>'<div class="recent-item"><span>'+esc(e.name)+' · '+formatDate(e.date)+' · G'+e.game+'</span><strong>'+e.score+'</strong></div>').join(''):'<div class="empty">Scores will appear here.</div>';
 }
 function formatDate(d){return new Date(d+'T12:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})}
+
+let savedScoreEdit=null;
+function savedScoreDirty(){return !!savedScoreEdit&&JSON.stringify(savedScoreEdit.entries)!==savedScoreEdit.originalEntries}
+function closeSavedScoreEditor(force=false){
+ if(!force&&savedScoreDirty()&&!confirm('Discard your unsaved score corrections?'))return;
+ savedScoreEdit=null;$('#savedScoreDialog').close();
+}
+function openSavedScoreEditor(nightId){
+ const team=currentTeam(),night=team?.nights.find(n=>n.id===nightId);if(!night)return;
+ savedScoreEdit={teamId:team.id,nightId:night.id,originalEntries:JSON.stringify(night.entries),entries:JSON.parse(JSON.stringify(night.entries))};
+ $('#savedScoreTitle').textContent='Edit scores · '+formatDate(night.date);
+ $('#savedScoreBody').innerHTML=[...new Set(savedScoreEdit.entries.map(e=>e.game))].sort((a,b)=>a-b).map(game=>'<section class="saved-game"><h3>Game '+game+'</h3>'+savedScoreEdit.entries.map((entry,index)=>{
+  if(entry.game!==game)return '';
+  entry.frames=Array.from({length:10},(_,frame)=>String(entry.frames?.[frame]||''));
+  return '<div class="saved-bowler"><div class="saved-bowler-heading"><strong>'+esc(entry.name)+'</strong><span data-saved-total="'+index+'"></span></div><div class="saved-frames">'+entry.frames.map((mark,frame)=>'<label><span>'+ (frame+1)+'</span><input class="saved-frame-input" data-saved-entry="'+index+'" data-saved-frame="'+frame+'" value="'+esc(mark)+'" maxlength="4" autocomplete="off" spellcheck="false" aria-label="'+esc(entry.name)+', game '+game+', frame '+(frame+1)+'"></label>').join('')+'</div><p class="muted small" data-saved-error="'+index+'"></p></div>';
+ }).join('')+'</section>').join('');
+ $$('[data-saved-entry]').forEach(input=>input.oninput=()=>{const entry=savedScoreEdit.entries[+input.dataset.savedEntry];input.value=normalizeFrame(input.value);entry.frames[+input.dataset.savedFrame]=input.value;updateSavedScoreTotals()});
+ updateSavedScoreTotals();$('#savedScoreDialog').showModal();
+}
+function updateSavedScoreTotals(){
+ if(!savedScoreEdit)return;
+ let invalid=0;
+ savedScoreEdit.entries.forEach((entry,index)=>{
+  const score=bowlingScore(entry.frames),total=$('[data-saved-total="'+index+'"]'),error=$('[data-saved-error="'+index+'"]');
+  total.textContent='Total: '+(score??'—');total.classList.toggle('invalid',score===null);
+  error.textContent=score===null?'Finish or correct the frames for this game.':'';
+  $$('[data-saved-entry="'+index+'"]').forEach(input=>input.setAttribute('aria-invalid',String(parseFrame(entry.frames[+input.dataset.savedFrame],+input.dataset.savedFrame)===null)));
+  if(score===null)invalid++;
+ });
+ $('#saveScoreChanges').disabled=invalid>0;
+ $('#savedScoreStatus').textContent=invalid?invalid+' game'+(invalid===1?' needs':'s need')+' corrected frames before saving.':'All game scores are valid. Ready to save.';
+}
+function saveScoreChanges(){
+ if(!savedScoreEdit)return;
+ const team=currentTeam(),night=team?.nights.find(n=>n.id===savedScoreEdit.nightId);
+ if(team?.id!==savedScoreEdit.teamId||!night||JSON.stringify(night.entries)!==savedScoreEdit.originalEntries){
+  $('#savedScoreStatus').textContent='This saved night changed. Cancel and reopen Edit Scores to load the latest copy.';return;
+ }
+ const entries=savedScoreEdit.entries.map(entry=>({...entry,frames:[...entry.frames],score:bowlingScore(entry.frames)}));
+ if(entries.some(entry=>entry.score===null)){updateSavedScoreTotals();return;}
+ night.entries=entries;night.editedAt=new Date().toISOString();
+ closeSavedScoreEditor(true);persist();toast('Saved scores updated');
+}
+
 function isValidNightDate(value){if(!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;const date=new Date(value+'T12:00:00Z');return Number.isFinite(date.getTime())&&date.toISOString().slice(0,10)===value}
-function renderHistory(){const t=currentTeam();const el=$('#historyList');if(!t||!t.nights.length){el.innerHTML='<div class="empty">No saved league nights for this team.</div>';return}el.innerHTML=[...t.nights].sort((a,b)=>b.date.localeCompare(a.date)).map(n=>{const ids=[...new Set(n.entries.map(e=>e.bowlerId))];const rows=ids.map(id=>{const es=n.entries.filter(e=>e.bowlerId===id).sort((a,b)=>a.game-b.game);const sum=es.reduce((a,b)=>a+b.score,0);return `<div>${esc(es[0]?.name||'')}</div>${[1,2,3].map(g=>`<div>${es.find(e=>e.game===g)?.score??'—'}</div>`).join('')}<div><strong>${sum}</strong></div>`}).join('');return `<div class="history-night"><div class="history-head wrap"><strong>${formatDate(n.date)}</strong><div class="row wrap"><button class="ghost icon-btn" data-edit-night="${esc(n.id)}" aria-expanded="false" aria-controls="date-editor-${esc(n.id)}">Edit Date</button><button class="ghost danger icon-btn" data-delete-night="${n.id}">Delete</button></div></div><form id="date-editor-${esc(n.id)}" class="hidden" data-date-editor="${esc(n.id)}" style="padding:.8rem"><label for="saved-date-${esc(n.id)}">League night date<input id="saved-date-${esc(n.id)}" type="date" value="${esc(n.date)}" required></label><div class="row wrap"><button class="primary" type="submit">Save Date</button><button class="ghost" type="button" data-cancel-date="${esc(n.id)}">Cancel</button></div></form><div class="history-grid"><div>Bowler</div><div>G1</div><div>G2</div><div>G3</div><div>Series</div>${rows}</div></div>`}).join('');$$('[data-edit-night]').forEach(btn=>btn.onclick=()=>{const form=document.getElementById('date-editor-'+btn.dataset.editNight);const opening=form.classList.contains('hidden');form.classList.toggle('hidden',!opening);btn.setAttribute('aria-expanded',String(opening));if(opening)form.querySelector('input').focus()});
+function renderHistory(){const t=currentTeam();const el=$('#historyList');if(!t||!t.nights.length){el.innerHTML='<div class="empty">No saved league nights for this team.</div>';return}el.innerHTML=[...t.nights].sort((a,b)=>b.date.localeCompare(a.date)).map(n=>{const ids=[...new Set(n.entries.map(e=>e.bowlerId))];const rows=ids.map(id=>{const es=n.entries.filter(e=>e.bowlerId===id).sort((a,b)=>a.game-b.game);const sum=es.reduce((a,b)=>a+b.score,0);return `<div>${esc(es[0]?.name||'')}</div>${[1,2,3].map(g=>`<div>${es.find(e=>e.game===g)?.score??'—'}</div>`).join('')}<div><strong>${sum}</strong></div>`}).join('');return `<div class="history-night"><div class="history-head wrap"><strong>${formatDate(n.date)}</strong><div class="row wrap"><button class="ghost icon-btn" data-edit-scores="${esc(n.id)}">Edit Scores</button><button class="ghost icon-btn" data-edit-night="${esc(n.id)}" aria-expanded="false" aria-controls="date-editor-${esc(n.id)}">Edit Date</button><button class="ghost danger icon-btn" data-delete-night="${n.id}">Delete</button></div></div><form id="date-editor-${esc(n.id)}" class="hidden" data-date-editor="${esc(n.id)}" style="padding:.8rem"><label for="saved-date-${esc(n.id)}">League night date<input id="saved-date-${esc(n.id)}" type="date" value="${esc(n.date)}" required></label><div class="row wrap"><button class="primary" type="submit">Save Date</button><button class="ghost" type="button" data-cancel-date="${esc(n.id)}">Cancel</button></div></form><div class="history-grid"><div>Bowler</div><div>G1</div><div>G2</div><div>G3</div><div>Series</div>${rows}</div></div>`}).join('');$$('[data-edit-scores]').forEach(btn=>btn.onclick=()=>openSavedScoreEditor(btn.dataset.editScores));$$('[data-edit-night]').forEach(btn=>btn.onclick=()=>{const form=document.getElementById('date-editor-'+btn.dataset.editNight);const opening=form.classList.contains('hidden');form.classList.toggle('hidden',!opening);btn.setAttribute('aria-expanded',String(opening));if(opening)form.querySelector('input').focus()});
 $$('[data-cancel-date]').forEach(btn=>btn.onclick=()=>{const form=btn.closest('form');form.classList.add('hidden');const edit=$$('[data-edit-night]').find(b=>b.dataset.editNight===btn.dataset.cancelDate);edit.setAttribute('aria-expanded','false');form.querySelector('input').value=t.nights.find(n=>n.id===btn.dataset.cancelDate).date;edit.focus()});
 $$('[data-date-editor]').forEach(form=>form.onsubmit=e=>{e.preventDefault();const value=form.querySelector('input').value;if(!isValidNightDate(value))return toast('Choose a valid league night date');const night=t.nights.find(n=>n.id===form.dataset.dateEditor);if(!night)return;night.date=value;t.nights.sort((a,b)=>a.date.localeCompare(b.date));persist();toast('League night date updated')});
 $$('[data-delete-night]').forEach(btn=>btn.onclick=()=>{if(confirm('Delete this league night?')){t.nights=t.nights.filter(n=>n.id!==btn.dataset.deleteNight);persist();toast('League night deleted')}})}
@@ -505,12 +549,13 @@ $('#scoreboardImage').onchange=()=>{const f=$('#scoreboardImage').files[0];if(!f
 $('#ocrBrightness').oninput=refreshPhotoAdjustments;
 $('#ocrContrast').oninput=refreshPhotoAdjustments;
 $('#resetPhotoAdjustments').onclick=()=>{$('#ocrBrightness').value='0';$('#ocrContrast').value='1';refreshPhotoAdjustments();};
+$('#saveScoreChanges').onclick=saveScoreChanges;$('#cancelScoreChanges').onclick=()=>closeSavedScoreEditor();$('#savedScoreDialog').addEventListener('cancel',event=>{event.preventDefault();closeSavedScoreEditor()});
 $('#nightDate').value=new Date().toISOString().slice(0,10);
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;$('#installBtn').classList.remove('hidden')});$('#installBtn').onclick=async()=>{if(deferredPrompt){deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null;$('#installBtn').classList.add('hidden')}};
 if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
 window.bowlingCloud={
  payload:()=>JSON.stringify({version:1,seasons:state.seasons}),
- hasDraft:()=>!!nightDraft?.games.some(g=>g.bowlers.some(b=>b.frames.some(Boolean))),
+ hasDraft:()=>!!savedScoreEdit||!!nightDraft?.games.some(g=>g.bowlers.some(b=>b.frames.some(Boolean))),
  local:()=>JSON.parse(localStorage.getItem(STORE_KEY)||JSON.stringify(blankState())),
  scope:userId=>{activeStoreKey=userId?STORE_KEY+'.account.'+userId:STORE_KEY;try{state=JSON.parse(localStorage.getItem(activeStoreKey))||blankState()}catch{state=blankState()}nightDraft=null;renderAll()},
  replace:payload=>{const data=JSON.parse(payload);if(!Array.isArray(data.seasons))throw Error('Invalid cloud data');state={version:1,seasons:data.seasons,selected:state.selected||blankState().selected};nightDraft=null;localStorage.setItem(activeStoreKey,JSON.stringify(state));renderAll()},
