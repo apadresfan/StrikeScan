@@ -86,6 +86,21 @@ function detectOcrRows(text){
   return {bowlerId:b.id,name:b.name,line:best.line,frames};
  });
 }
+function adjustScoreboardPixels(data,brightness,contrast){
+ const out=new Uint8ClampedArray(data);
+ for(let i=0;i<out.length;i+=4)for(let k=0;k<3;k++)out[i+k]=Math.max(0,Math.min(255,(out[i+k]-128)*contrast+128+brightness));
+ return out;
+}
+function refreshPhotoAdjustments(){
+ const b=+$('#ocrBrightness').value,c=+$('#ocrContrast').value;
+ $('#brightnessValue').textContent=(b>=0?'+':'')+b;
+ $('#contrastValue').textContent=c.toFixed(2)+'×';
+ // CSS brightness is only a preview approximation; OCR uses the numeric pixel adjustment.
+ $('#imagePreview').style.filter='contrast('+c+') brightness('+(1+b/128)+')';
+ ocrResult=null;$('#applyOcrBtn').disabled=true;$('#ocrDetails').classList.add('hidden');
+ $('#ocrStatus').textContent='Photo settings changed. Click Read Scoreboard to retry.';
+}
+
 async function prepareScoreboard(file,enhance){
  const url=URL.createObjectURL(file),img=new Image();
  try{
@@ -94,6 +109,8 @@ async function prepareScoreboard(file,enhance){
   const scale=Math.min(2,3200/Math.max(img.naturalWidth,img.naturalHeight));
   canvas.width=Math.round(img.naturalWidth*scale);canvas.height=Math.round(img.naturalHeight*scale);
   const ctx=canvas.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);
+  const brightness=+$('#ocrBrightness').value,contrast=+$('#ocrContrast').value;
+  if(brightness!==0||contrast!==1){const image=ctx.getImageData(0,0,canvas.width,canvas.height);image.data.set(adjustScoreboardPixels(image.data,brightness,contrast));ctx.putImageData(image,0,0);}
   if(enhance){
    const pixels=ctx.getImageData(0,0,canvas.width,canvas.height),d=pixels.data;let sum=0;
    for(let i=0;i<d.length;i+=4)sum+=.299*d[i]+.587*d[i+1]+.114*d[i+2];
@@ -219,7 +236,17 @@ async function runOcr(){
  try{
   if($('#ocrMode').value==='digital'){
    const original=await prepareScoreboard(file,false),ctx=original.getContext('2d');
-   const rows=readDigitalGrid(ctx.getImageData(0,0,original.width,original.height).data,original.width,original.height);
+   let pixels=ctx.getImageData(0,0,original.width,original.height).data;
+   let rows=readDigitalGrid(pixels,original.width,original.height);
+   if(rows.some(r=>r.frames.some(f=>!f))){
+    $('#ocrStatus').textContent='Retrying faint marks with extra contrast…';
+    try{
+     const retry=readDigitalGrid(adjustScoreboardPixels(pixels,0,1.25),original.width,original.height);
+     if(retry.length===rows.length)rows=rows.map((r,ri)=>({...r,frames:r.frames.map((f,fi)=>{
+      const other=retry[ri].frames[fi];return f&&other&&f!==other?'':f||other||'';
+     })}));
+    }catch(e){/* Keep the original reading when extra contrast hides grid lines. */}
+   }
    if(currentTeam()?.id!==teamId)throw new Error('The selected team changed. Read this photo again.');
    ocrResult={text:'Digital grid reader: check all marks. Colored split indicators may need manual correction.',rows,teamId,game};
    $('#ocrText').textContent=ocrResult.text;
@@ -273,6 +300,9 @@ function showView(name){$$('.view').forEach(v=>v.classList.toggle('active',v.id=
 $$('.tab').forEach(b=>b.onclick=()=>showView(b.dataset.view));$$('[data-go]').forEach(b=>b.onclick=()=>showView(b.dataset.go));
 $('#addSeasonBtn').onclick=addSeason;$('#addLeagueBtn').onclick=addLeague;$('#addTeamBtn').onclick=addTeam;$('#addBowlerBtn').onclick=addBowler;$('#saveNightBtn').onclick=saveNight;$('#clearNightBtn').onclick=clearNight;$('#runOcrBtn').onclick=runOcr;$('#applyOcrBtn').onclick=applyOcr;$('#exportBtn').onclick=exportBackup;$('#importBtn').onclick=importBackup;
 $('#scoreboardImage').onchange=()=>{const f=$('#scoreboardImage').files[0];if(!f)return;$('#imagePreview').src=URL.createObjectURL(f);$('#imagePreviewWrap').classList.remove('hidden');ocrResult=null;$('#applyOcrBtn').disabled=true;$('#ocrDetails').classList.add('hidden')};
+$('#ocrBrightness').oninput=refreshPhotoAdjustments;
+$('#ocrContrast').oninput=refreshPhotoAdjustments;
+$('#resetPhotoAdjustments').onclick=()=>{$('#ocrBrightness').value='0';$('#ocrContrast').value='1';refreshPhotoAdjustments();};
 $('#nightDate').value=new Date().toISOString().slice(0,10);
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;$('#installBtn').classList.remove('hidden')});$('#installBtn').onclick=async()=>{if(deferredPrompt){deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null;$('#installBtn').classList.add('hidden')}};
 if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
