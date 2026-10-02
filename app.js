@@ -33,7 +33,11 @@ function renderBowlers(){const t=currentTeam();const el=$('#bowlerList'); if(!t)
 function normalizeFrame(s){return String(s||'').toUpperCase().replace(/\s+/g,'').replace(/[O0]/g,'0')}
 function parseFrame(frame,index){const s=normalizeFrame(frame);if(index<9){if(s==='X')return [10];if(/^\d\/$/.test(s)){const a=+s[0];return [a,10-a]}if(/^\d[-\d]$/.test(s)){const a=+s[0],b=s[1]==='-'?0:+s[1];if(a+b<10)return[a,b]}if(/^[-]\d$/.test(s)){const b=+s[1];return[0,b]}if(s==='--')return[0,0];return null}
   let rolls=[]; for(let i=0;i<s.length;i++){const c=s[i];if(c==='X'){rolls.push(10)}else if(c==='-'){rolls.push(0)}else if(/\d/.test(c)){rolls.push(+c)}else if(c==='/'){if(!rolls.length)return null;rolls.push(10-rolls[rolls.length-1])}else return null}
-  if(rolls.length<2||rolls.length>3)return null; const first=rolls[0],second=rolls[1];
+  if(rolls.length<2||rolls.length>3||s[0]==='/')return null; const first=rolls[0],second=rolls[1];
+  if(first<10 && first+second>10)return null;
+  if(first===10 && s[1]==='/')return null;
+  if(first===10 && second<10 && second+(rolls[2]||0)>10)return null;
+  if(first<10 && s[2]==='/')return null;
   if(first<10 && first+second<10 && rolls.length!==2)return null;
   if(first===10 && rolls.length!==3)return null;
   if(first<10 && first+second===10 && rolls.length!==3)return null;
@@ -57,10 +61,92 @@ function formatDate(d){return new Date(d+'T12:00:00').toLocaleDateString(undefin
 function renderHistory(){const t=currentTeam();const el=$('#historyList');if(!t||!t.nights.length){el.innerHTML='<div class="empty">No saved league nights for this team.</div>';return}el.innerHTML=[...t.nights].sort((a,b)=>b.date.localeCompare(a.date)).map(n=>{const ids=[...new Set(n.entries.map(e=>e.bowlerId))];const rows=ids.map(id=>{const es=n.entries.filter(e=>e.bowlerId===id).sort((a,b)=>a.game-b.game);const sum=es.reduce((a,b)=>a+b.score,0);return `<div>${esc(es[0]?.name||'')}</div>${[1,2,3].map(g=>`<div>${es.find(e=>e.game===g)?.score??'—'}</div>`).join('')}<div><strong>${sum}</strong></div>`}).join('');return `<div class="history-night"><div class="history-head"><strong>${formatDate(n.date)}</strong><button class="ghost danger icon-btn" data-delete-night="${n.id}">Delete</button></div><div class="history-grid"><div>Bowler</div><div>G1</div><div>G2</div><div>G3</div><div>Series</div>${rows}</div></div>`}).join('');$$('[data-delete-night]').forEach(btn=>btn.onclick=()=>{if(confirm('Delete this league night?')){t.nights=t.nights.filter(n=>n.id!==btn.dataset.deleteNight);persist();toast('League night deleted')}})}
 function tokenizeMarks(line){return line.toUpperCase().replace(/\|/g,' ').split(/\s+/).map(x=>x.replace(/[^X\-\/0-9]/g,'')).filter(Boolean)}
 function levenshtein(a,b){a=a.toLowerCase();b=b.toLowerCase();const m=Array.from({length:b.length+1},(_,i)=>[i]);for(let j=0;j<=a.length;j++)m[0][j]=j;for(let i=1;i<=b.length;i++)for(let j=1;j<=a.length;j++)m[i][j]=b[i-1]===a[j-1]?m[i-1][j-1]:1+Math.min(m[i-1][j],m[i][j-1],m[i-1][j-1]);return m[b.length][a.length]}
-function detectOcrRows(text){const t=currentTeam();if(!t)return[];const lines=text.split(/\n+/).map(x=>x.trim()).filter(Boolean);return t.bowlers.map(b=>{let best=null;for(const line of lines){const words=line.split(/\s+/);const nameBits=b.name.split(/\s+/);const prefix=words.slice(0,Math.min(3,Math.max(1,nameBits.length+1))).join(' ');const dist=levenshtein(b.name,prefix);const contains=line.toLowerCase().includes(b.name.toLowerCase());const rank=(contains?-20:0)+dist;if(!best||rank<best.rank)best={line,rank}}const tokens=tokenizeMarks(best?.line||'');const frames=tokens.filter(tok=>/^(X|--|-\d|\d-|\d\/|\d\d|[X0-9\/-]{2,4})$/.test(tok));return {bowlerId:b.id,name:b.name,line:best?.line||'',frames:frames.slice(0,10),confidence:best?Math.max(0,100-best.rank*10):0}})}
-async function runOcr(){const file=$('#scoreboardImage').files[0];if(!file)return toast('Choose a scoreboard photo first');if(!window.Tesseract)return toast('OCR library did not load. Check your internet connection.');$('#ocrProgress').classList.remove('hidden');$('#ocrDetails').classList.add('hidden');$('#runOcrBtn').disabled=true;$('#ocrStatus').textContent='Reading scoreboard…';try{const result=await Tesseract.recognize(file,'eng',{logger:m=>{if(m.status==='recognizing text'){const pct=Math.round((m.progress||0)*100);$('#ocrProgressBar').style.width=pct+'%';$('#ocrStatus').textContent=`Reading scoreboard… ${pct}%`}}});const text=result.data.text||'';const rows=detectOcrRows(text);ocrResult={text,rows};$('#ocrText').textContent=text;$('#ocrDetected').innerHTML=rows.map(r=>`<div class="bowler"><div><strong>${esc(r.name)}</strong><div class="muted small">${esc(r.line||'No matching row')}</div></div><div>${r.frames.map(esc).join(' · ')||'No frames detected'}</div></div>`).join('');$('#ocrDetails').classList.remove('hidden');$('#applyOcrBtn').disabled=false;$('#ocrStatus').textContent='OCR finished. Review the detected rows, then apply them to the score sheet.'}catch(e){console.error(e);$('#ocrStatus').textContent='OCR failed on this image. Try a straighter, closer photo.'}finally{$('#runOcrBtn').disabled=false;$('#ocrProgress').classList.add('hidden')}}
-function applyOcr(){if(!ocrResult||!nightDraft)return;let filled=0;
-  for(const r of ocrResult.rows){const all=tokenizeMarks(r.line).filter(tok=>/^(X|--|-\d|\d-|\d\/|\d\d|[X0-9\/-]{2,4})$/.test(tok));const chunks=all.length>=30?[all.slice(0,10),all.slice(10,20),all.slice(20,30)]:[r.frames.slice(0,10)];chunks.forEach((frames,gi)=>{const b=nightDraft.games[gi]?.bowlers.find(x=>x.bowlerId===r.bowlerId);if(!b)return;frames.forEach((f,i)=>{if(i<10&&f){b.frames[i]=normalizeFrame(f);filled++}})})}renderScoreSheet();$$('.frame-input').forEach(inp=>{if(inp.value)inp.classList.add('ocr-fill')});toast(`Applied ${filled} OCR frame values. Please verify them.`)}
+function detectOcrRows(text){
+ const t=currentTeam();if(!t)return[];
+ const lines=text.split(/\n+/).map(x=>x.trim()).filter(Boolean),used=new Set();
+ return t.bowlers.map(b=>{
+  const name=b.name.toLowerCase().replace(/[^a-z0-9]/g,'');
+  let best=null;
+  lines.forEach((line,i)=>{
+   if(used.has(i))return;
+   const prefix=line.split(/\s+/).slice(0,b.name.split(/\s+/).length).join('').toLowerCase().replace(/[^a-z0-9]/g,'');
+   const distance=levenshtein(name,prefix);
+   if(distance<=Math.max(1,Math.floor(name.length*.25))&&(!best||distance<best.distance))best={line,i,distance};
+  });
+  if(!best)return {bowlerId:b.id,name:b.name,line:'No matching name',frames:[]};
+  used.add(best.i);
+  // Only accept a complete, valid sequence. Never interpret totals as partial frames.
+  const tail=best.line.split(/\s+/).slice(b.name.split(/\s+/).length).join(' ');
+  const tokens=tail.toUpperCase().replace(/[|]/g,' ').trim().split(/\s+/);
+  let frames=[];
+  for(let start=0;start+10<=tokens.length;start++){
+   const candidate=tokens.slice(start,start+10);
+   if(candidate.every((f,i)=>parseFrame(f,i)!==null)&&bowlingScore(candidate)!==null){frames=candidate;break;}
+  }
+  return {bowlerId:b.id,name:b.name,line:best.line,frames};
+ });
+}
+async function prepareScoreboard(file,enhance){
+ const url=URL.createObjectURL(file),img=new Image();
+ try{
+  await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=()=>reject(new Error('This photo format could not be opened. Please upload a JPG or PNG.'));img.src=url;});
+  const canvas=document.createElement('canvas');
+  const scale=Math.min(2,3200/Math.max(img.naturalWidth,img.naturalHeight));
+  canvas.width=Math.round(img.naturalWidth*scale);canvas.height=Math.round(img.naturalHeight*scale);
+  const ctx=canvas.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);
+  if(enhance){
+   const pixels=ctx.getImageData(0,0,canvas.width,canvas.height),d=pixels.data;let sum=0;
+   for(let i=0;i<d.length;i+=4)sum+=.299*d[i]+.587*d[i+1]+.114*d[i+2];
+   const invert=sum/(d.length/4)<128;
+   for(let i=0;i<d.length;i+=4){let v=.299*d[i]+.587*d[i+1]+.114*d[i+2];if(invert)v=255-v;v=Math.max(0,Math.min(255,(v-128)*1.8+128));d[i]=d[i+1]=d[i+2]=v;}
+   ctx.putImageData(pixels,0,0);
+  }
+  return canvas;
+ }finally{URL.revokeObjectURL(url);}
+}
+async function runOcr(){
+ const file=$('#scoreboardImage').files[0],team=currentTeam();
+ if(!file)return toast('Choose a scoreboard photo first');
+ if(!team?.bowlers.length)return toast('Select a team and add its bowlers first');
+ if(!window.Tesseract){$('#ocrStatus').textContent='The OCR download did not load. Connect to the internet and reload this page.';return;}
+ const teamId=team.id,game=+$('#ocrGame').value;let worker;
+ ocrResult=null;$('#applyOcrBtn').disabled=true;$('#ocrProgress').classList.remove('hidden');$('#ocrDetails').classList.add('hidden');$('#runOcrBtn').disabled=true;$('#ocrStatus').textContent='Loading the OCR engine…';
+ try{
+  worker=await Tesseract.createWorker('eng',1,{logger:m=>{
+   $('#ocrStatus').textContent=m.status==='recognizing text'?'Reading scoreboard… '+Math.round((m.progress||0)*100)+'%':m.status;
+   $('#ocrProgressBar').style.width=Math.round((m.progress||0)*100)+'%';
+  }});
+  await worker.setParameters({tessedit_pageseg_mode:'6',preserve_interword_spaces:'1'});
+  const enhanced=await prepareScoreboard(file,true);
+  let result=await worker.recognize(enhanced),text=result.data.text||'',rows=detectOcrRows(text);
+  if(!rows.some(r=>r.frames.length===10)){
+   $('#ocrStatus').textContent='Trying the original photo with a different reading layout…';
+   await worker.setParameters({tessedit_pageseg_mode:'3'});
+   const original=await prepareScoreboard(file,false),retry=await worker.recognize(original);
+   const retryRows=detectOcrRows(retry.data.text||'');
+   if(retryRows.filter(r=>r.frames.length===10).length>rows.filter(r=>r.frames.length===10).length||(!text.trim()&&(retry.data.text||'').trim())){text=retry.data.text||'';rows=retryRows;}
+  }
+  if(currentTeam()?.id!==teamId)throw new Error('The selected team changed. Select the correct team and read this photo again.');
+  ocrResult={text,rows,teamId,game};
+  $('#ocrText').textContent=text||'No text was recognized.';
+  $('#ocrDetected').innerHTML=rows.map(r=>'<div class="bowler"><div><strong>'+esc(r.name)+'</strong><div class="muted small">'+esc(r.line)+'</div></div><div>'+(r.frames.length?r.frames.map(esc).join(' · '):'No complete frame row detected')+'</div></div>').join('');
+  $('#ocrDetails').classList.remove('hidden');$('#ocrDetails').open=true;
+  const count=rows.filter(r=>r.frames.length===10).length;
+  $('#applyOcrBtn').disabled=count===0;
+  $('#ocrStatus').textContent=count?'Read '+count+' bowler rows for Game '+game+'. Review the marks before applying.':'Text was read, but no complete frame rows could be safely identified. Photograph only your team, straight on, with names and all 10 frames visible. Open the OCR text below to see what was read.';
+ }catch(e){console.error(e);$('#ocrStatus').textContent='OCR could not finish: '+(e.message||'Check your internet connection and try a JPG or PNG photo.');}
+ finally{if(worker)await worker.terminate().catch(()=>{});$('#runOcrBtn').disabled=false;$('#ocrProgress').classList.add('hidden');}
+}
+function applyOcr(){
+ if(!ocrResult||!nightDraft)return;
+ if(ocrResult.teamId!==currentTeam()?.id)return toast('Read the photo again for this team');
+ const game=nightDraft.games.find(g=>g.game===ocrResult.game);
+ if(!game)return;
+ if(game.bowlers.some(b=>b.frames.some(Boolean))&&!confirm('Replace detected bowlers’ marks in Game '+game.game+'?'))return;
+ let filled=0;
+ for(const row of ocrResult.rows){if(row.frames.length!==10)continue;const b=game.bowlers.find(b=>b.bowlerId===row.bowlerId);if(b){b.frames=[...row.frames];filled+=10;}}
+ renderScoreSheet();toast('Applied '+filled+' frame marks to Game '+game.game+'. Verify before saving.');
+}
 function exportBackup(){const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`bowling-tracker-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(a.href)}
 function importBackup(){const f=$('#importFile').files[0];if(!f)return toast('Choose a backup file');const reader=new FileReader();reader.onload=()=>{try{const data=JSON.parse(reader.result);if(!data.seasons)throw new Error('Invalid');if(confirm('Replace current bowling data with this backup?')){state=data;nightDraft=null;persist();toast('Backup imported')}}catch{toast('That file is not a valid bowling backup')}};reader.readAsText(f)}
 function clearNight(){const t=currentTeam();if(!t)return;if(confirm('Clear the current unsaved score sheet?')){nightDraft={teamId:t.id,games:blankGames(t)};renderScoreSheet()}}
