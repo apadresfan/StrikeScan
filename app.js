@@ -1,11 +1,12 @@
 const STORE_KEY='leagueNightBowlingTracker.v1';
+let activeStoreKey=STORE_KEY;
 const $=s=>document.querySelector(s); const $$=s=>[...document.querySelectorAll(s)];
 const uid=()=>crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2);
 let deferredPrompt=null, ocrResult=null;
 let state=load();
 function blankState(){return {version:1,seasons:[],selected:{seasonId:null,leagueId:null,teamId:null}}}
 function load(){try{return JSON.parse(localStorage.getItem(STORE_KEY))||blankState()}catch{return blankState()}}
-function persist(){localStorage.setItem(STORE_KEY,JSON.stringify(state));renderAll()}
+function persist(){localStorage.setItem(activeStoreKey,JSON.stringify(state));renderAll();window.dispatchEvent(new Event('bowling-data-changed'))}
 function esc(s=''){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200)}
 function currentSeason(id=state.selected.seasonId){return state.seasons.find(x=>x.id===id)}
@@ -503,4 +504,12 @@ $('#resetPhotoAdjustments').onclick=()=>{$('#ocrBrightness').value='0';$('#ocrCo
 $('#nightDate').value=new Date().toISOString().slice(0,10);
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;$('#installBtn').classList.remove('hidden')});$('#installBtn').onclick=async()=>{if(deferredPrompt){deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null;$('#installBtn').classList.add('hidden')}};
 if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
+window.bowlingCloud={
+ payload:()=>JSON.stringify({version:1,seasons:state.seasons}),
+ hasDraft:()=>!!nightDraft?.games.some(g=>g.bowlers.some(b=>b.frames.some(Boolean))),
+ local:()=>JSON.parse(localStorage.getItem(STORE_KEY)||JSON.stringify(blankState())),
+ scope:userId=>{activeStoreKey=userId?STORE_KEY+'.account.'+userId:STORE_KEY;try{state=JSON.parse(localStorage.getItem(activeStoreKey))||blankState()}catch{state=blankState()}nightDraft=null;renderAll()},
+ replace:payload=>{const data=JSON.parse(payload);if(!Array.isArray(data.seasons))throw Error('Invalid cloud data');state={version:1,seasons:data.seasons,selected:state.selected||blankState().selected};nightDraft=null;localStorage.setItem(activeStoreKey,JSON.stringify(state));renderAll()},
+ backup:()=>{localStorage.setItem(activeStoreKey+'.beforeCloudReplace',JSON.stringify(state));exportBackup()}
+};
 renderAll();
