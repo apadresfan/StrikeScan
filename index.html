@@ -42,6 +42,10 @@
           <label>Team<select id="dashTeamSelect"></select></label>
         </div>
         <label>Bowler statistics<select id="dashboardBowlerSelect"></select></label>
+        <div class="row wrap">
+          <button id="downloadBowlerPdfBtn" class="primary" disabled>Download Bowler PDF</button>
+          <button id="shareBowlerPdfBtn" class="ghost" disabled>Share Bowler PDF</button>
+        </div><p class="muted small">Select a bowler with saved games to export their statistics, scores and frame details.</p>
       </div>
       <div id="statCards" class="stat-grid"></div>
       <div id="bowlerStatCards" class="stat-grid"></div>
@@ -197,6 +201,7 @@
   <div id="toast" class="toast" role="status"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-  <script src="app.js?v=20261002-stats1"></script>
+  <script src="vendor/jspdf.umd.min.js"></script>
+  <script src="app.js?v=20261002-pdf1"></script>
 </body>
 </html>
