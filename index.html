@@ -7,7 +7,7 @@
   <title>StrikeScan · League Night</title>
   <link rel="icon" type="image/svg+xml" sizes="any" href="ball-pin.svg?v=20261002-icon1" />
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="styles.css?v=20261002-scores1" />
+  <link rel="stylesheet" href="styles.css?v=20261002-chart1" />
 </head>
 <body>
   <header class="topbar">
@@ -52,6 +52,7 @@
       <div id="statCards" class="stat-grid"></div>
       <div id="bowlerStatCards" class="stat-grid"></div>
       <p id="gameAverageSummary" class="muted small"></p>
+      <div class="card progress-card"><h3>Bowler progress</h3><p class="muted small">Tap a score to see the game details.</p><div id="bowlerProgress"></div></div>
       <div class="grid-2">
         <div class="card">
           <div class="section-title"><h3 id="recentNightsTitle">Recent league nights</h3></div>
@@ -249,7 +250,8 @@
 
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script src="vendor/jspdf.umd.min.js"></script>
-  <script src="app.js?v=20261002-scores1"></script>
+  <script src="app.js?v=20261002-chart1"></script>
   <script type="module" src="cloud-sync.js?v=20261002-cloud1"></script>
 </body>
 </html>
+
