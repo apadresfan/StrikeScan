@@ -23,6 +23,7 @@
     <button class="tab" data-view="night">League Night</button>
     <button class="tab" data-view="history">History</button>
     <button class="tab" data-view="backup">Backup</button>
+    <button class="tab" data-view="cloud">Cloud Sync</button>
   </nav>
 
   <main>
@@ -193,7 +194,40 @@
         </div>
       </div>
       <div class="card notice">
-        <strong>Storage:</strong> This version saves data in this browser using local storage. GitHub Pages can host the app itself. Export a backup periodically until cloud syncing is added.
+        <strong>Storage:</strong> Scores save on this device. Sign in under Cloud Sync to synchronize saved games between devices. Keep occasional downloadable backups, too.
+      </div>
+    </section>
+    <section id="view-cloud" class="view">
+      <div class="card">
+        <h2>Cloud Sync</h2>
+        <p class="muted">Use the same account on your phone and computer. Saved bowlers, seasons and games sync automatically when connected. Save your league night to sync its frames.</p>
+        <p id="cloudStatus" role="status" aria-live="polite">Loading cloud connection… If this stays here, check your internet connection and reload. Your device scores still work.</p>
+        <div id="cloudLogin">
+          <label for="cloudEmail">Email<input id="cloudEmail" type="email" autocomplete="username"></label>
+          <label for="cloudPassword">Password<input id="cloudPassword" type="password" autocomplete="current-password" minlength="6"></label>
+          <div class="row wrap">
+            <button id="cloudSignIn" class="primary">Sign in</button>
+            <button id="cloudCreateAccount" class="ghost">Create account</button>
+            <button id="cloudResetPassword" class="ghost">Forgot password</button>
+          </div>
+        </div>
+        <div id="cloudAccount" class="hidden">
+          <p>Signed in as <strong id="cloudUser"></strong></p>
+          <div class="row wrap">
+            <button id="cloudSyncNow" class="primary">Sync now</button>
+            <button id="cloudUploadLocal" class="ghost">Upload existing device scores</button>
+            <button id="cloudSignOut" class="ghost">Sign out</button>
+          </div>
+          <p class="muted small">First time? Upload your existing scores from the device where you saved them. Your original device scorebook stays available when signed out.</p>
+        </div>
+        <div id="cloudConflict" class="notice hidden" style="padding:1rem;margin-top:1rem">
+          <strong>Two different scorebooks need your review.</strong>
+          <p>Download a backup before choosing a copy if you need to combine scores later.</p>
+          <div class="row wrap">
+            <button id="cloudUseRemote" class="primary">Use cloud scores</button>
+            <button id="cloudKeepDevice" class="ghost">Keep this device’s saved scores</button>
+          </div>
+        </div>
       </div>
     </section>
   </main>
@@ -202,6 +236,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script src="vendor/jspdf.umd.min.js"></script>
-  <script src="app.js?v=20261002-pdf1"></script>
+  <script src="app.js?v=20261002-cloud1"></script>
+  <script type="module" src="cloud-sync.js?v=20261002-cloud1"></script>
 </body>
 </html>
