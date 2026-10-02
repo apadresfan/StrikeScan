@@ -1,5 +1,5 @@
-const CACHE='bowling-tracker-v6-ocr';
-const CORE=['./','./index.html','./styles.css','./app.js?v=20261002-ocr6','./manifest.webmanifest'];
+const CACHE='bowling-tracker-v7-ocr';
+const CORE=['./','./index.html','./styles.css','./app.js?v=20261002-ocr7','./manifest.webmanifest'];
 self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE)))});
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('bowling-tracker-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',e=>{
