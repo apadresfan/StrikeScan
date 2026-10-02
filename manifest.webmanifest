@@ -1,0 +1,10 @@
+{
+  "name":"League Night Bowling Tracker",
+  "short_name":"Bowling Tracker",
+  "start_url":"./",
+  "display":"standalone",
+  "background_color":"#0b1020",
+  "theme_color":"#121827",
+  "description":"Track bowling league nights, scores, teams, seasons, and scoreboard OCR.",
+  "icons":[]
+}
