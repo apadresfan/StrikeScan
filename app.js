@@ -101,12 +101,12 @@ function refreshPhotoAdjustments(){
  $('#ocrStatus').textContent='Photo settings changed. Click Read Scoreboard to retry.';
 }
 
-async function prepareScoreboard(file,enhance){
+async function prepareScoreboard(file,enhance,preserveSize=false){
  const url=URL.createObjectURL(file),img=new Image();
  try{
   await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=()=>reject(new Error('This photo format could not be opened. Please upload a JPG or PNG.'));img.src=url;});
   const canvas=document.createElement('canvas');
-  const scale=Math.min(2,3200/Math.max(img.naturalWidth,img.naturalHeight));
+  const scale=Math.min(preserveSize?1:2,3200/Math.max(img.naturalWidth,img.naturalHeight));
   canvas.width=Math.round(img.naturalWidth*scale);canvas.height=Math.round(img.naturalHeight*scale);
   const ctx=canvas.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);
   const brightness=+$('#ocrBrightness').value,contrast=+$('#ocrContrast').value;
@@ -235,7 +235,7 @@ async function runOcr(){
  ocrResult=null;$('#applyOcrBtn').disabled=true;$('#ocrProgress').classList.remove('hidden');$('#ocrDetails').classList.add('hidden');$('#runOcrBtn').disabled=true;$('#ocrStatus').textContent='Loading the OCR engine…';
  try{
   if($('#ocrMode').value==='digital'){
-   const original=await prepareScoreboard(file,false),ctx=original.getContext('2d');
+   const original=await prepareScoreboard(file,false,true),ctx=original.getContext('2d');
    let pixels=ctx.getImageData(0,0,original.width,original.height).data;
    let rows=readDigitalGrid(pixels,original.width,original.height);
    if(rows.some(r=>r.frames.some(f=>!f))){
