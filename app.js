@@ -18,7 +18,7 @@ function renderSelectors(){ensureSelection(); const s=currentSeason(),l=currentL
   bindSelect($('#seasonSelect'),state.seasons,state.selected.seasonId,v=>{state.selected.seasonId=v;state.selected.leagueId=null;state.selected.teamId=null;persist()},'Choose season');
   bindSelect($('#leagueSelect'),s?.leagues||[],state.selected.leagueId,v=>{state.selected.leagueId=v;state.selected.teamId=null;persist()},'Choose league');
   bindSelect($('#teamSelect'),l?.teams||[],state.selected.teamId,v=>{state.selected.teamId=v;persist()},'Choose team');
-  for(const prefix of ['night','history']){
+  for(const prefix of ['night','history','dash']){
     const sEl=$(`#${prefix}SeasonSelect`),lEl=$(`#${prefix}LeagueSelect`),tEl=$(`#${prefix}TeamSelect`);
     bindSelect(sEl,state.seasons,state.selected.seasonId,v=>{state.selected.seasonId=v;state.selected.leagueId=null;state.selected.teamId=null;persist()},'Season');
     bindSelect(lEl,currentSeason()?.leagues||[],state.selected.leagueId,v=>{state.selected.leagueId=v;state.selected.teamId=null;persist()},'League');
@@ -53,10 +53,55 @@ function renderScoreSheet(){ensureDraft();const el=$('#scoreSheet');const t=curr
 function updateTotals(){if(!nightDraft)return;let valid=0,total=0;for(const g of nightDraft.games){for(const b of g.bowlers){total++;const s=bowlingScore(b.frames);const el=document.querySelector(`[data-total="${g.game}:${b.bowlerId}"]`);if(el){el.textContent=s??'—';el.classList.toggle('valid',s!=null);el.classList.toggle('invalid',s==null&&b.frames.some(Boolean))}if(s!=null)valid++}}$('#nightValidation').textContent=`${valid} of ${total} bowler games complete and valid.`}
 function saveNight(){const t=currentTeam();if(!t||!nightDraft)return toast('Select a team');const entries=[];for(const g of nightDraft.games){for(const b of g.bowlers){const score=bowlingScore(b.frames);if(score==null)return toast(`Finish or correct Game ${g.game} for ${b.name}`);entries.push({game:g.game,bowlerId:b.bowlerId,name:b.name,frames:[...b.frames],score})}}
   t.nights.push({id:uid(),date:$('#nightDate').value||new Date().toISOString().slice(0,10),createdAt:new Date().toISOString(),entries});t.nights.sort((a,b)=>a.date.localeCompare(b.date));nightDraft={teamId:t.id,games:blankGames(t)};persist();toast('League night saved')}
-function statsForTeam(t){const entries=(t?.nights||[]).flatMap(n=>n.entries);const scores=entries.map(e=>e.score);const series=[];for(const n of t?.nights||[]){const by={};for(const e of n.entries){(by[e.bowlerId]??=[]).push(e.score)}for(const arr of Object.values(by))if(arr.length===3)series.push(arr.reduce((a,b)=>a+b,0))}return {games:scores.length,avg:scores.length?scores.reduce((a,b)=>a+b,0)/scores.length:0,high:scores.length?Math.max(...scores):0,highSeries:series.length?Math.max(...series):0}}
-function renderDashboard(){const s=currentSeason(),l=currentLeague(),t=currentTeam();$('#dashTitle').textContent=t?`${t.name} — ${l.name}`:'No team selected';$('#dashSubtitle').textContent=s?`${s.name} season`:'Create a season, league, and team to get started.';const st=statsForTeam(t);$('#statCards').innerHTML=[['Games',st.games],['Average',st.avg?st.avg.toFixed(1):'—'],['High Game',st.high||'—'],['High Series',st.highSeries||'—']].map(([l,v])=>`<div class="stat"><div class="value">${v}</div><div class="label">${l}</div></div>`).join('');
-  const nights=[...(t?.nights||[])].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);$('#recentNights').innerHTML=nights.length?nights.map(n=>{const scores=n.entries.map(e=>e.score);return `<div class="recent-item"><span>${formatDate(n.date)}</span><strong>${scores.length} games logged</strong></div>`}).join(''):'<div class="empty">No league nights saved yet.</div>';
-  const highs=(t?.nights||[]).flatMap(n=>n.entries.map(e=>({...e,date:n.date}))).sort((a,b)=>b.score-a.score).slice(0,5);$('#highScores').innerHTML=highs.length?highs.map(e=>`<div class="recent-item"><span>${esc(e.name)} · ${formatDate(e.date)}</span><strong>${e.score}</strong></div>`).join(''):'<div class="empty">Scores will appear here.</div>'}
+function dashboardBowlers(t){
+ const byId=new Map((t?.bowlers||[]).map(b=>[b.id,{id:b.id,name:b.name}]));
+ for(const n of t?.nights||[])for(const e of n.entries)if(!byId.has(e.bowlerId))byId.set(e.bowlerId,{id:e.bowlerId,name:e.name});
+ return [...byId.values()];
+}
+function statsForTeam(t,bowlerId=null){
+ const nights=(t?.nights||[]).map(n=>({...n,entries:n.entries.filter(e=>!bowlerId||e.bowlerId===bowlerId)})).filter(n=>n.entries.length);
+ const entries=nights.flatMap(n=>n.entries),scores=entries.map(e=>e.score),series=[];
+ let strikes=0,spares=0,opens=0,frames=0;
+ for(const n of nights){
+  const by=new Map();
+  for(const e of n.entries){if(!by.has(e.bowlerId))by.set(e.bowlerId,[]);by.get(e.bowlerId).push(e);}
+  for(const games of by.values())if(games.length===3&&new Set(games.map(e=>e.game)).size===3)series.push(games.reduce((a,e)=>a+e.score,0));
+ }
+ for(const e of entries)for(let i=0;i<10;i++){
+  const rolls=parseFrame(e.frames?.[i],i);if(!rolls)continue;
+  frames++;if(rolls[0]===10)strikes++;else if(rolls[0]+rolls[1]===10)spares++;else opens++;
+ }
+ const average=values=>values.length?values.reduce((a,b)=>a+b,0)/values.length:null;
+ return {entries,nights,games:scores.length,avg:average(scores),high:scores.length?Math.max(...scores):null,
+ highSeries:series.length?Math.max(...series):null,avgSeries:average(series),strikes,spares,opens,frames,
+ gameAverages:[1,2,3].map(game=>average(entries.filter(e=>e.game===game).map(e=>e.score)))};
+}
+function renderDashboard(){
+ const s=currentSeason(),l=currentLeague(),t=currentTeam(),bowlers=dashboardBowlers(t);
+ if(!bowlers.some(b=>b.id===state.selected.bowlerId))state.selected.bowlerId=null;
+ const id=state.selected.bowlerId,bowler=bowlers.find(b=>b.id===id);
+ bindSelect($('#dashboardBowlerSelect'),bowlers,id,v=>{state.selected.bowlerId=v;persist()},'All team bowlers');
+ $('#dashboardBowlerSelect').disabled=!bowlers.length;
+ $('#dashTitle').textContent=bowler?bowler.name+' — '+t.name:t?t.name+' — '+l.name:'No team selected';
+ $('#dashSubtitle').textContent=s?s.name+' season'+(bowler?' · '+l.name:'')+' · '+(bowler?'Individual bowler statistics':'All team bowlers'):'Create a season, league, and team to get started.';
+ const st=statsForTeam(t,id),decimal=value=>value===null?'—':value.toFixed(1);
+ const cards=items=>items.map(([label,value])=>'<div class="stat"><div class="value">'+value+'</div><div class="label">'+label+'</div></div>').join('');
+ $('#statCards').innerHTML=cards([['Games',st.games],['Average',decimal(st.avg)],['High Game',st.high??'—'],['High Series',st.highSeries??'—']]);
+ $('#bowlerStatCards').innerHTML=cards([['Average Series',decimal(st.avgSeries)],['Strikes',st.strikes],['Spares',st.spares],['Open Frames',st.opens]]);
+ $('#gameAverageSummary').textContent=st.games?st.gameAverages.map((avg,i)=>'Game '+(i+1)+' average: '+decimal(avg)).join(' · ')+(st.frames?' · Strike rate: '+(100*st.strikes/st.frames).toFixed(1)+'% · Spare conversion: '+(st.frames>st.strikes?(100*st.spares/(st.frames-st.strikes)).toFixed(1)+'%':'—'):''):'Save a league night to see statistics.';
+ $('#recentNightsTitle').textContent=bowler?'Games & series history':'Recent league nights';
+ const nights=[...st.nights].sort((a,b)=>b.date.localeCompare(a.date));
+ if(bowler){
+  $('#recentNights').innerHTML=nights.length?'<div class="history-grid"><div>Date</div><div>G1</div><div>G2</div><div>G3</div><div>Series</div>'+nights.map(n=>{
+   const games=[1,2,3].map(g=>n.entries.find(e=>e.game===g)?.score);
+   return '<div>'+formatDate(n.date)+'</div>'+games.map(score=>'<div>'+(score??'—')+'</div>').join('')+'<div><strong>'+(games.every(score=>score!==undefined)?games.reduce((a,b)=>a+b,0):'—')+'</strong></div>';
+  }).join('')+'</div>':'<div class="empty">No saved games for this bowler in the selected season, league and team.</div>';
+ }else{
+  $('#recentNights').innerHTML=nights.length?nights.slice(0,5).map(n=>'<div class="recent-item"><span>'+formatDate(n.date)+'</span><strong>'+n.entries.length+' games logged</strong></div>').join(''):'<div class="empty">No league nights saved yet.</div>';
+ }
+ const highs=st.nights.flatMap(n=>n.entries.map(e=>({...e,date:n.date}))).sort((a,b)=>b.score-a.score).slice(0,5);
+ $('#highScores').innerHTML=highs.length?highs.map(e=>'<div class="recent-item"><span>'+esc(e.name)+' · '+formatDate(e.date)+' · G'+e.game+'</span><strong>'+e.score+'</strong></div>').join(''):'<div class="empty">Scores will appear here.</div>';
+}
 function formatDate(d){return new Date(d+'T12:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})}
 function renderHistory(){const t=currentTeam();const el=$('#historyList');if(!t||!t.nights.length){el.innerHTML='<div class="empty">No saved league nights for this team.</div>';return}el.innerHTML=[...t.nights].sort((a,b)=>b.date.localeCompare(a.date)).map(n=>{const ids=[...new Set(n.entries.map(e=>e.bowlerId))];const rows=ids.map(id=>{const es=n.entries.filter(e=>e.bowlerId===id).sort((a,b)=>a.game-b.game);const sum=es.reduce((a,b)=>a+b.score,0);return `<div>${esc(es[0]?.name||'')}</div>${[1,2,3].map(g=>`<div>${es.find(e=>e.game===g)?.score??'—'}</div>`).join('')}<div><strong>${sum}</strong></div>`}).join('');return `<div class="history-night"><div class="history-head"><strong>${formatDate(n.date)}</strong><button class="ghost danger icon-btn" data-delete-night="${n.id}">Delete</button></div><div class="history-grid"><div>Bowler</div><div>G1</div><div>G2</div><div>G3</div><div>Series</div>${rows}</div></div>`}).join('');$$('[data-delete-night]').forEach(btn=>btn.onclick=()=>{if(confirm('Delete this league night?')){t.nights=t.nights.filter(n=>n.id!==btn.dataset.deleteNight);persist();toast('League night deleted')}})}
 function tokenizeMarks(line){return line.toUpperCase().replace(/\|/g,' ').split(/\s+/).map(x=>x.replace(/[^X\-\/0-9]/g,'')).filter(Boolean)}
