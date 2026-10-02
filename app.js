@@ -154,6 +154,50 @@ function straightenDigitalGrid(data,w,h){
  return out;
 }
 
+const SPLIT_FONT=[{"char":"6","features":"fd9632224555568afe8521124677789bfd8410037abccdddfd8410048bdeeffefd8410149cfffffffd8400149dfffffffd8300048ceffffffd7300026accdffffd73000258aacdeefd83000135789bcdfd830000246679bcfd830000245668abfd8300003555568afd8300003566567afd83000146666679fd83000147776679fd83000147886679fd83000147886579fd83000146776569fd83000135665569fd84000024554469fd94000024444469fe9631001222347affa743112223358a004abbaa99889aae005cccbbabaaccbe106cedbdffffffef105bddbcfffefede005bccbcfffffede004accbdfffffdee004abbacfffffdef004abcbcffffffff004abcbceedeffff004accacddcdeefe0049bcaccdcddeef0049bcbbcccccddf004accbbddccdddf004abccceeeeedef004accccfffeeeef004acdcdfffeeeef0049ddbcfeefedef005adcccefeeeddf005bccccefeeecdf005bccbcefefeddf005adcbcdfefeddf005adcbbeeeedcdf005cccabcccccbcf106cdccbcccccbdf"},{"char":"7","features":"cba6432000000001cbb8664310000002dcccbbaa73000002dddddddc95100002dddeeeeda5100002cdeffffeb6210003cdeffffeb6210013cdeffffea5210124cdeffffc84110135ddefffeb73110245ddefffda63111356ddefedb852222467dddedc7522336898ddddba5322458aaaddcb98522357abbadcca86311479cdcbccb96520259adedccca7420027bdfffdcba6320027cefffdcba6320038defffdcba5210038dffffddb95210048dffffdcba6431259deffeccbb744336adeffdb001dcba87899aaae002feddcbaaaabaf002feedefecbbbcf001eeeddffbbbabf001eddccfebababf001ddcccefbabbbf002edccdefcbbbbf002eddddfecbbbbf001eeddefdbbbbcf001eddefecbbbcdf001edeffcabbcdff001eeefebabbceff001fefebbbccefff001fffdbabdeefff001fffdabceefeef101fffcaadffddde101ffebaaeffccce101fcbbaafedcbcd100ecbbaafecccce000ecbbaafecbccd000ecbaabfdcbccd000fcbaacfeccccd100ecbaacfdcdcde100feeccdfeddcdd"},{"char":"7","features":"cba8542000000000cbb9764320000000ccddccba85200000cddeeedca7310000cdeffffdc8430000cdefffffd9540000cdefffffea640000ceffffffd9530001ceffffffc8420002cefffffeb7420013cefffffc96321134ceffffeb85332246cdefeda754334588cdeedc9533334699cdedcb74333468aadddca95323568abbdddb97421367accbddc965201489ceebdcc85310159adfecdcb74200259beffcccb7420026acfffcccb7431136bcfffcccb8543357bcffebccb8654458bcefeb0003aaa8999988890007ededddccbbbc0007ffeffffecbce1006ffdefffecbbd1007feddeffecbbd1007eeddeffebbbc1007eeddeffeabbb1007feedefecaabc1007ffeefedcaabd1006efeefedcaace1006eeefedcbaacf1005eeeeedcbabdf1005efeecbcccdef1006ffedcbccefef1006ffecbbcdffee1006fedcbbeeffee1007fecbbcefffee1007fecbbdffedef1007fecbbdffedef1007edccceffddef1006edccceffddef1007feccceffdeee1006feeddfffddee1007fffeefffedef"},{"char":"7","features":"cbba763100000000cccb875310000000ddddcba864210000cddddddb96320001cddeffedb8420001dddeffffd9530001cddeffffea630001cdefffffeb640001cdeeffffda631002cdeeffffd9531012cddefffeb8431123cddeffec97431235cddeedb864333568dddddca743334689ddddcb953234689addddba7422457abbdddca95212469cdcddcc97310257befeddcb86200258cffedccb86200268cfffdccb86200269dffedccb86200279dffedccb8631248aeffedccb8743358adffe00006765577787880001ceca9aaababb0001efeedefebcbd1000dfdddefecbbc1000dedcdefecbbc1000dedddefecbbc1001deddcdedbbac1001deeedfedbbbb1000efeeefecabab1000deefffdcabbc1001dfefffcbabbd1001effffebaabce1002ffffdcbbcdef0001fffdbbbcdfff0000fffcabbcdfee1001ffdcbbcdefed1001ffdcbbdeffed0001ffcbcceffddd1001ffccccffedcd1000efbcccffedcc1000efcbbbffddcc1100efccbbffdccc1100ffcbacffdccd1100efdbbdfedccd"},{"char":"7","features":"ba86332100000004bb97543200000014cccba98631000014cdddcba852000025cdefeec963000025ceffffeb74100135cefffffc84210135cefffffc95211246cefffffb74221357ceffffea63223467ceffffd953334578ceffed9642345789cdca985323569aaacdb966422367abbaccb853223579bccacca63212369bdddbcb95210247aceedbbb73000159ceffdbba7200015adeffdbba7200015aefffdbba6200016aefffebba7300025aefffdbba8532146aefffebba8643358adeffeb0048889aa998878d008bccecccccbabe00aeeefffccccbbf009ddcdffddccbcf009dcccefedccbcf009ccccdffdccbcf009cccccffcccbcf009dddbdffcccccf00addddefddccbdf009ddddffdcdccef00adddefdccccdff00addeffcccbceff00bfffdcbcbcdeef00bfffcbbcbceeee00bffebbbddddcee00cfedbcceeedcde00dfccbcdffecbdf00debbcbffedccdf00deabdcffdccdef01deabcbfedcddef01debcccffecddef01eebbbdffecdeee03ffdcdefffeedee03ffeeeeffeeddef"},{"char":"8","features":"ffb743233323349dffa532123221238dffa521123311127cffa521134311127cffa511135421127cffa510135421127cffa400135421127cff9300012110016cff9300011100016cff9300000000026cff9300000000026cff9300000000026cff9310011100027cff9310122200027cff9410234310027cff9410245421027dfe9411356521027dfe9411356521027dff9411256520028eff9410245420028eff9410134310038eff940012210014aeffa52123321146cfffb74334543358df008cbababbcbaaef008cccbbbbccbaef008ccbbcdeccbbef009ccbbeffdcbbff009ccbbfffedbbff009ccccfffedcbff009dcccfffedcbff00addccefecdcbff00adcbccddcccaff009dcbcccccccaff009cccccdccdcaff009ccccdcccccaff00accccccccdcaff00accccdddddcaff009cccceeeedcbef009cccceeeedcbff019ccccffeedcbff009ccbcdeeeddaef009bbbbdeddccbff009bbbbdeedccaff00ababbeedcccaef009cbbbefeccbaef00abbcccccccbdff00bdccbccddcbeff"},{"char":"7","features":"cca8520000000000dcb9742100000000eedca97653000001eeedcba985200001eeeeedcba7400001eeefffedc8510002eeefffffd9510002eeefffffea510013eeefffffd9500024eeeffffec8400135eeeffffca6300245eeefffeb95212356eeeeeca762235788eeeddb8542247899deddc96432368abadddca8532247accadddc96321259cddbddca7310137ceffcddca6310138cfffcedc96200038dfffcedc96200149dfffcedc9520015aefffcedc9642236adfffcedca754447adeffc0003cccbbaaab9ac0007eefefddddcce1007ffffffedeccd1007efeeffeddcbd1107eeddefedccbc1007edddeeecbbbc1007edccdeecbbab1008edccdeebccbd1008eccddfdbbbbd1008dccdeecbbbbd1007eddeeecbbbce1007fddeedbcccdf1008fffedbbcdeef1008fffdcbbceeff1008ffdccbbdeeff1009ffcbbccefeef1009febbbcceeddf1008fcbbbcefeddf1008fbbcccffeddf1008ebabbcffeddf1009fcbbbcffeddf1008fbbbcceffede1008fbbddefffedf1008fdceefffffff"},{"char":"7","features":"cca8654321000000dcb9875432000000ddccbaa975210000dddddccca8420000ddeeeefeca530000ddefffffeb641000edeffffffc741000edefffffeb640001eeefffffda530001eeefffffc9420002edeffffeb8320013edefffec96310124edeeddb853212367edddcc9642223578edddba853123589aeddca963213469bbeddc985211468bdcedcb86311268bffeedca75201369dffeedca75201379dfffedca6510148adfffedca6520248adfffedca7632359bdffeedcb874456abdffe2002ab98988999880000ffdcccbccbbb1000fffeffedcbbb1101fffefffecbbb1001ffedeefeabbb1001ffdddeeeabba1001ffddddddaabb1001ffddcdddbcbc1001ffdddeedbbbc1001ffdddeddbcbb1000eeddeeccbccb1000efdeedcccccc1000efffdcbbceef1000efffdbbbceef1000efddccccdfee1000efdcbcddeffe1000efcbabdeffed0000debaacefffee0000eebaadfffeee1000eebaadfffeee0000efbbadfffeed0000dfbbadfffede1010dfcbcefffeee1000efdccfffffff"}];
+function highlightedRollFeatures(data,w,h,left,top,right,bottom){
+ left=Math.round(left);top=Math.round(top);right=Math.round(right);bottom=Math.round(bottom);
+ const values=[];let blue=0;
+ for(let yy=0;yy<24;yy++)for(let xx=0;xx<16;xx++){
+  const x=Math.min(right-1,left+Math.floor((xx+.5)*(right-left)/16)),y=Math.min(bottom-1,top+Math.floor((yy+.5)*(bottom-top)/24));
+  if(x<0||x>=w||y<0||y>=h)return null;
+  const i=(y*w+x)*4,r=data[i],g=data[i+1],b=data[i+2];
+  if(b>140&&r<b*.9)blue++;
+  values.push([r-b,g]);
+ }
+ if(blue/values.length<.30)return null;
+ let features='';
+ for(let axis=0;axis<2;axis++){
+  const sorted=values.map(v=>v[axis]).sort((a,b)=>a-b),lo=sorted[Math.floor(sorted.length/10)],hi=sorted[Math.floor(sorted.length*9/10)];
+  features+=values.map(v=>Math.max(0,Math.min(15,Math.round((v[axis]-lo)/Math.max(1,hi-lo)*15))).toString(16)).join('');
+ }
+ return features;
+}
+function readSplitFirstRoll(data,w,h,edge,top){
+ const scale=w/973,end=edge-31*scale,features=highlightedRollFeatures(data,w,h,end-29*scale,top+5*scale,end,top+34*scale);
+ if(!features)return null;
+ const scores=SPLIT_FONT.map(t=>{let sum=0;for(let i=0;i<features.length;i++)sum+=Math.abs(parseInt(features[i],16)-parseInt(t.features[i],16));return {char:t.char,error:sum/features.length/15};}).sort((a,b)=>a.error-b.error);
+ const best=scores[0],other=scores.find(s=>s.char!==best.char);
+ return best.error<.12&&(!other||other.error-best.error>.025)?best.char:null;
+}
+function readSplitSecondRoll(data,w,edge,top){
+ const scale=w/973,left=Math.round(edge-30*scale),right=Math.round(edge-3*scale),up=Math.round(top+4*scale),down=Math.round(top+38*scale);
+ const lit=(x,y)=>{const i=(y*w+x)*4;return data[i+1]>85&&data[i+2]>150&&data[i]<data[i+2]*.75};
+ let a=right,b=left,c=down,d=up;
+ for(let y=up;y<down;y++)for(let x=left;x<right;x++)if(lit(x,y)){a=Math.min(a,x);b=Math.max(b,x+1);c=Math.min(c,y);d=Math.max(d,y+1);}
+ if(b-a<3||d-c<2)return null;
+ const aspect=(b-a)/(d-c);if(aspect>2.5)return '-';
+ let mask='';
+ for(let yy=0;yy<24;yy++)for(let xx=0;xx<16;xx++)mask+=lit(Math.min(b-1,a+Math.floor((xx+.5)*(b-a)/16)),Math.min(d-1,c+Math.floor((yy+.5)*(d-c)/24)))?'1':'0';
+ let best=null;
+ for(const t of GRID_FONT.filter(t=>/^[0-9/-]$/.test(t.char))){
+  let diff=0;for(let i=0;i<mask.length;i++)if(mask[i]!==t.mask[i])diff++;
+  const error=diff/mask.length+Math.min(.4,Math.abs(Math.log(aspect/t.aspect))*.15);
+  if(!best||error<best.error)best={char:t.char,error};
+ }
+ return best.error<.28?best.char:null;
+}
+
 function readDigitalGrid(data,w,h,adjusted=false){
  let red=0,green=0;for(let i=0;i<data.length;i+=400){red+=data[i];green+=data[i+1];}const pink=red>green*1.15;
  const lit=(x,y)=>{const i=(y*w+x)*4;return adjusted?((data[i+1]>170&&data[i+2]>150)||(data[i]>170&&data[i+2]>170)):(data[i+1]>110&&data[i+2]>110&&data[i]<data[i+1]*.85)};
@@ -205,7 +249,14 @@ function readDigitalGrid(data,w,h,adjusted=false){
     }
     if(best.error>.28){uncertain=true;break;}marks+=best.char;
    }
-   frames.push(!uncertain&&parseFrame(marks,f)!==null?marks:'');
+   let mark=!uncertain&&parseFrame(marks,f)!==null?marks:'';
+   if(pink&&f<9&&!mark){
+    const first=readSplitFirstRoll(data,w,h,frameEdges[f+1],top);
+    const second=first?readSplitSecondRoll(data,w,frameEdges[f+1],top):null;
+    const candidate=first&&second?first+second:'';
+    if(candidate&&parseFrame(candidate,f)!==null)mark=candidate;
+   }
+   frames.push(mark);
   }
   rows.push({bowlerId:'',name:'Scoreboard row '+(rows.length+1),line:'Assign this row to a bowler; check all frame marks.',frames});
  }
@@ -248,7 +299,7 @@ async function runOcr(){
     }catch(e){/* Keep the original reading when extra contrast hides grid lines. */}
    }
    if(currentTeam()?.id!==teamId)throw new Error('The selected team changed. Read this photo again.');
-   ocrResult={text:'Digital grid reader: check all marks. Colored split indicators may need manual correction.',rows,teamId,game};
+   ocrResult={text:'Digital grid reader: check all marks. Highlighted first-ball marks are read separately. Verify all detected values.',rows,teamId,game};
    $('#ocrText').textContent=ocrResult.text;
    renderOcrReview(rows,true);
    $('#ocrDetails').classList.remove('hidden');$('#ocrDetails').open=true;
