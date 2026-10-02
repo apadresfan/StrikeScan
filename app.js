@@ -498,6 +498,7 @@ function bowlerPdfData(){
  return {bowler:bowler.name,season:currentSeason().name,league:currentLeague().name,team:team.name,stats,generated:new Date()};
 }
 function createBowlerPdf(model,PdfClass=window.jspdf.jsPDF){
+ if(!window.bowlingPdfHeader)throw new Error('The PDF header did not load. Reload the page and try again.');
  const doc=new PdfClass({unit:'pt',format:'letter',compress:true});
  const M=42,W=528,BOTTOM=742;let y=42;
  const clean=value=>String(value??'-').replace(/[\u2010-\u2015]/g,'-').replace(/\u00b7/g,'/').replace(/[\u2018\u2019]/g,"'").replace(/[\u201c\u201d]/g,'"');
@@ -508,7 +509,7 @@ function createBowlerPdf(model,PdfClass=window.jspdf.jsPDF){
   label(text,size,bold);const lines=doc.splitTextToSize(clean(text),W);
   for(const line of lines){room(size+5);doc.text(line,M,y);y+=size+5;}
  }
- function newPage(){doc.addPage();y=38;label('',10,true);doc.text(clean(model.bowler)+' - Bowling Report',M,y);y+=14;doc.setDrawColor(218,224,232);doc.line(M,y,M+W,y);y+=22;}
+ function newPage(){doc.addPage();doc.addImage(window.bowlingPdfHeader,'JPEG',M,26,264,88,'bowling-header','FAST');y=132;label('',10,true);doc.text(clean(model.bowler)+' - Bowling Report',M,y);y+=14;doc.setDrawColor(218,224,232);doc.line(M,y,M+W,y);y+=22;}
  function room(height){if(y+height>BOTTOM)newPage();}
  function section(title,height=35){room(height+10);y+=18;label('',12,true);doc.text(title,M,y);y+=17;}
  function tableHead(headers,widths){
@@ -519,6 +520,7 @@ function createBowlerPdf(model,PdfClass=window.jspdf.jsPDF){
   room(height);let x=M;doc.setDrawColor(219,225,233);label('',9,false);
   cells.forEach((cell,i)=>{doc.rect(x,y,widths[i],height);doc.text(clean(cell),x+widths[i]/2,y+15,{align:'center'});x+=widths[i];});y+=height;
  }
+ doc.addImage(window.bowlingPdfHeader,'JPEG',M,30,W,176,'bowling-header','FAST');y=226;
  label('',10,true,[182,42,109]);doc.text('STRIKESCAN / BOWLER REPORT',M,y);y+=26;
  paragraph(model.bowler,22,true);y+=3;
  paragraph('Season: '+model.season+'   |   League: '+model.league);
