@@ -165,8 +165,8 @@ function renderOcrReview(rows,grid){
  $('#ocrDetected').innerHTML=rows.map((r,i)=>'<div class="game-block"><strong>'+esc(r.name)+'</strong>'+
  (grid?'<label>Bowler<select data-ocr-row="'+i+'"><option value="">Choose bowler for this row</option>'+currentTeam().bowlers.map(b=>'<option value="'+b.id+'">'+esc(b.name)+'</option>').join('')+'</select></label>':'')+
  '<p class="muted small">'+esc(r.line)+'</p><div class="row wrap">'+r.frames.map((f,fi)=>'<label>Frame '+(fi+1)+'<input data-ocr-frame="'+i+':'+fi+'" value="'+esc(f)+'" maxlength="3" style="width:65px"></label>').join('')+'</div></div>').join('');
- $('[data-ocr-row]').forEach(el=>el.onchange=()=>{const row=ocrResult.rows[+el.dataset.ocrRow];row.bowlerId=el.value;updateOcrApply();});
- $('[data-ocr-frame]').forEach(el=>el.oninput=()=>{const [r,f]=el.dataset.ocrFrame.split(':').map(Number);ocrResult.rows[r].frames[f]=normalizeFrame(el.value);updateOcrApply();});
+ $$('[data-ocr-row]').forEach(el=>el.onchange=()=>{const row=ocrResult.rows[+el.dataset.ocrRow];row.bowlerId=el.value;updateOcrApply();});
+ $$('[data-ocr-frame]').forEach(el=>el.oninput=()=>{const [r,f]=el.dataset.ocrFrame.split(':').map(Number);ocrResult.rows[r].frames[f]=normalizeFrame(el.value);updateOcrApply();});
  updateOcrApply();
 }
 function updateOcrApply(){
