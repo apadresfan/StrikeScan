@@ -77,6 +77,23 @@ function statsForTeam(t,bowlerId=null){
  highSeries:series.length?Math.max(...series):null,avgSeries:average(series),strikes,spares,opens,frames,
  gameAverages:[1,2,3].map(game=>average(entries.filter(e=>e.game===game).map(e=>e.score)))};
 }
+function renderBowlerProgress(){
+ const root=$('#bowlerProgress'),team=currentTeam(),id=state.selected.bowlerId;
+ const bowler=dashboardBowlers(team).find(b=>b.id===id);
+ if(!bowler){root.innerHTML='<div class="empty">Choose a bowler above to see their progress.</div>';return}
+ const games=[...(team?.nights||[])].sort((a,b)=>a.date.localeCompare(b.date)||String(a.createdAt||'').localeCompare(String(b.createdAt||''))).flatMap(n=>n.entries.filter(e=>e.bowlerId===id&&Number.isFinite(e.score)).sort((a,b)=>a.game-b.game).map(e=>({date:n.date,game:e.game,score:e.score})));
+ if(!games.length){root.innerHTML='<div class="empty">No saved games for '+esc(bowler.name)+' in this selection yet.</div>';return}
+ const avg=games.reduce((sum,g)=>sum+g.score,0)/games.length;
+ const w=Math.max(280,root.clientWidth||600),h=260,left=36,right=w-18,top=18,bottom=210;
+ const x=i=>games.length===1?(left+right)/2:left+i*(right-left)/(games.length-1),y=s=>bottom-s/300*(bottom-top);
+ const dateLabel=d=>new Date(d+'T12:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric'});
+ const ticks=[0,100,200,300].map(s=>'<line class="progress-grid" x1="'+left+'" x2="'+right+'" y1="'+y(s)+'" y2="'+y(s)+'"/><text x="'+(left-8)+'" y="'+(y(s)+4)+'" text-anchor="end">'+s+'</text>').join('');
+ const labels=[...new Set([0,Math.floor((games.length-1)/2),games.length-1])].map(i=>'<text x="'+x(i)+'" y="234" text-anchor="'+(i===0?'start':i===games.length-1?'end':'middle')+'">'+esc(dateLabel(games[i].date))+'</text>').join('');
+ root.innerHTML='<p class="muted small">'+esc(bowler.name)+' · '+games.length+' games · Selected season, league and team</p><div class="progress-legend"><span><i class="progress-score-key"></i>Game score</span><span><i class="progress-average-key"></i>Season average: '+avg.toFixed(1)+'</span></div><svg class="progress-chart" viewBox="0 0 '+w+' '+h+'" role="group" aria-label="'+esc(bowler.name)+' game scores in date order, from 0 to 300. Season average '+avg.toFixed(1)+'">'+ticks+'<line class="progress-average" x1="'+left+'" x2="'+right+'" y1="'+y(avg)+'" y2="'+y(avg)+'"/><polyline class="progress-line" points="'+games.map((g,i)=>x(i)+','+y(g.score)).join(' ')+'"/>'+games.map((g,i)=>'<g class="progress-point" role="button" tabindex="0" data-progress-game="'+i+'" aria-label="'+esc(formatDate(g.date))+', game '+g.game+', score '+g.score+'"><circle class="progress-hit" cx="'+x(i)+'" cy="'+y(g.score)+'" r="14"/><circle class="progress-dot" cx="'+x(i)+'" cy="'+y(g.score)+'" r="4"/></g>').join('')+labels+'<text x="'+((left+right)/2)+'" y="256" text-anchor="middle">Games in date order</text></svg><p id="progressDetail" class="progress-detail" aria-live="polite"></p><details class="progress-data"><summary>View all game scores</summary><table><thead><tr><th>Date</th><th>Game</th><th>Score</th></tr></thead><tbody>'+games.map(g=>'<tr><td>'+esc(formatDate(g.date))+'</td><td>'+g.game+'</td><td>'+g.score+'</td></tr>').join('')+'</tbody></table></details>';
+ const select=i=>{const g=games[i];$('#progressDetail').textContent=formatDate(g.date)+' · Game '+g.game+' · Score '+g.score+' · '+(g.score>=avg?'+':'')+(g.score-avg).toFixed(1)+' vs. average';root.querySelectorAll('[data-progress-game]').forEach(el=>el.setAttribute('aria-pressed',String(+el.dataset.progressGame===i)))};
+ root.querySelectorAll('[data-progress-game]').forEach(el=>{el.onclick=()=>select(+el.dataset.progressGame);el.onfocus=()=>select(+el.dataset.progressGame);el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();select(+el.dataset.progressGame)}}});select(games.length-1);
+}
+
 function renderDashboard(){
  const s=currentSeason(),l=currentLeague(),t=currentTeam(),bowlers=dashboardBowlers(t);
  if(!bowlers.some(b=>b.id===state.selected.bowlerId))state.selected.bowlerId=null;
@@ -92,6 +109,7 @@ function renderDashboard(){
  $('#statCards').innerHTML=cards([['Games',st.games],['Average',decimal(st.avg)],['High Game',st.high??'—'],['High Series',st.highSeries??'—']]);
  $('#bowlerStatCards').innerHTML=cards([['Average Series',decimal(st.avgSeries)],['Strikes',st.strikes],['Spares',st.spares],['Open Frames',st.opens]]);
  $('#gameAverageSummary').textContent=st.games?st.gameAverages.map((avg,i)=>'Game '+(i+1)+' average: '+decimal(avg)).join(' · ')+(st.frames?' · Strike rate: '+(100*st.strikes/st.frames).toFixed(1)+'% · Spare conversion: '+(st.frames>st.strikes?(100*st.spares/(st.frames-st.strikes)).toFixed(1)+'%':'—'):''):'Save a league night to see statistics.';
+ renderBowlerProgress();
  $('#recentNightsTitle').textContent=bowler?'Games & series history':'Recent league nights';
  const nights=[...st.nights].sort((a,b)=>b.date.localeCompare(a.date));
  if(bowler){
@@ -562,3 +580,6 @@ window.bowlingCloud={
  backup:()=>{localStorage.setItem(activeStoreKey+'.beforeCloudReplace',JSON.stringify(state));exportBackup()}
 };
 renderAll();
+
+
+let progressResizeTimer;window.addEventListener('resize',()=>{clearTimeout(progressResizeTimer);progressResizeTimer=setTimeout(renderBowlerProgress,120)});
