@@ -1,1327 +1,186 @@
-<!DOCTYPE html>
-<html lang="en" class="dark h-full">
+<!doctype html>
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>StrikeScan - Bowling League Scoreboard Tracker</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Chart.js for Performance Visualizations -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
-    
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Teko:wght@600;700&display=swap');
-        
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #0b0f19;
-            color: #f8fafc;
-        }
-
-        .font-bowling {
-            font-family: 'Teko', sans-serif;
-            letter-spacing: 0.05em;
-        }
-
-        /* Custom Scrollbar */
-        ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #0f172a;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #334155;
-            border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #475569;
-        }
-
-        .glass-panel {
-            background: rgba(15, 23, 42, 0.75);
-            backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-        }
-    </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#121827" />
+  <title>League Night Bowling Tracker</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="stylesheet" href="styles.css" />
 </head>
-<body class="min-h-screen flex flex-col bg-slate-950 text-slate-100">
-
-    <!-- Header -->
-    <header class="border-b border-slate-800 bg-slate-900/90 sticky top-0 z-30 backdrop-blur-md">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-            <div class="flex items-center space-x-3">
-                <div class="p-2 bg-gradient-to-tr from-amber-500 via-orange-500 to-red-600 rounded-xl shadow-lg shadow-orange-500/20">
-                    <i data-lucide="disc" class="w-6 h-6 text-slate-950"></i>
-                </div>
-                <div>
-                    <span class="font-bowling text-3xl font-bold tracking-wider bg-gradient-to-r from-amber-400 via-orange-400 to-red-500 bg-clip-text text-transparent">STRIKESCAN</span>
-                    <span class="text-xs text-slate-400 hidden sm:inline-block ml-2 border-l border-slate-700 pl-2">League Scoreboard Tracker</span>
-                </div>
-            </div>
-
-            <div class="flex items-center space-x-2 sm:space-x-3">
-                <!-- Gemini API Key Button -->
-                <button id="btn-open-settings" class="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs transition font-medium">
-                    <i data-lucide="key" class="w-3.5 h-3.5 text-amber-400"></i>
-                    <span class="hidden sm:inline">Gemini API Key</span>
-                </button>
-
-                <!-- Data Wipe Button -->
-                <button id="btn-reset-app" class="flex items-center space-x-1.5 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg text-xs transition font-medium">
-                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-                    <span class="hidden md:inline">Wipe All Data</span>
-                </button>
-            </div>
-        </div>
-    </header>
-
-    <!-- Navigation Tabs -->
-    <nav class="bg-slate-900/60 border-b border-slate-800 text-sm font-medium">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex space-x-2 overflow-x-auto">
-            <button data-tab="leagues" class="tab-btn px-4 py-3 border-b-2 border-amber-500 text-amber-400 flex items-center space-x-2 whitespace-nowrap font-semibold">
-                <i data-lucide="trophy" class="w-4 h-4"></i>
-                <span>Leagues & Rosters</span>
-            </button>
-            <button data-tab="scorecard" class="tab-btn px-4 py-3 border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center space-x-2 whitespace-nowrap font-semibold">
-                <i data-lucide="edit-3" class="w-4 h-4"></i>
-                <span>Interactive Scorecard</span>
-            </button>
-            <button data-tab="ocr" class="tab-btn px-4 py-3 border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center space-x-2 whitespace-nowrap font-semibold">
-                <i data-lucide="camera" class="w-4 h-4"></i>
-                <span>AI Overhead OCR Scan</span>
-                <span class="bg-gradient-to-r from-amber-500 to-red-500 text-slate-950 font-extrabold text-[10px] px-1.5 py-0.5 rounded-full">AI</span>
-            </button>
-            <button data-tab="analytics" class="tab-btn px-4 py-3 border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center space-x-2 whitespace-nowrap font-semibold">
-                <i data-lucide="bar-chart-2" class="w-4 h-4"></i>
-                <span>Analytics & Leaders</span>
-            </button>
-        </div>
-    </nav>
-
-    <!-- Main Content Workspace -->
-    <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
-
-        <!-- TAB 1: LEAGUES & ROSTERS -->
-        <section id="tab-leagues" class="tab-content space-y-6">
-            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div>
-                    <h1 class="text-2xl font-bold text-slate-100 flex items-center gap-2">
-                        <i data-lucide="shield" class="text-amber-500 w-6 h-6"></i> League & Team Setup
-                    </h1>
-                    <p class="text-slate-400 text-sm">Organize annual bowling leagues, maintain team rosters, and log weekly 3-game series.</p>
-                </div>
-                <button id="btn-open-create-league" class="px-4 py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-slate-950 font-bold rounded-xl shadow-lg shadow-amber-500/10 flex items-center gap-2 text-sm transition">
-                    <i data-lucide="plus-circle" class="w-4 h-4"></i> Create New League
-                </button>
-            </div>
-
-            <!-- Leagues List Container -->
-            <div id="leagues-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <!-- JS populated -->
-            </div>
-        </section>
-
-        <!-- TAB 2: INTERACTIVE SCORECARD -->
-        <section id="tab-scorecard" class="tab-content hidden space-y-6">
-            <div class="glass-panel p-4 sm:p-6 rounded-2xl space-y-6">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pb-4 border-b border-slate-800">
-                    <div>
-                        <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Active League</label>
-                        <select id="scorecard-league-select" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-100 focus:ring-2 focus:ring-amber-500 focus:outline-none">
-                            <option value="">-- Choose League --</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Active Team</label>
-                        <select id="scorecard-team-select" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-100 focus:ring-2 focus:ring-amber-500 focus:outline-none" disabled>
-                            <option value="">-- Choose Team --</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Session Date</label>
-                        <input type="date" id="scorecard-date-input" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-slate-100 focus:ring-2 focus:ring-amber-500 focus:outline-none">
-                    </div>
-                </div>
-
-                <!-- Game Selector Header -->
-                <div class="flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-900/80 p-3.5 rounded-xl border border-slate-800">
-                    <div class="flex items-center space-x-3 w-full sm:w-auto">
-                        <span class="text-xs font-semibold text-slate-400 uppercase whitespace-nowrap">Series Game:</span>
-                        <div class="flex space-x-1.5" id="game-tab-buttons">
-                            <button data-game="1" class="game-num-btn px-4 py-1.5 rounded-lg text-xs font-bold bg-amber-500 text-slate-950">Game 1</button>
-                            <button data-game="2" class="game-num-btn px-4 py-1.5 rounded-lg text-xs font-bold bg-slate-800 text-slate-300 hover:bg-slate-700">Game 2</button>
-                            <button data-game="3" class="game-num-btn px-4 py-1.5 rounded-lg text-xs font-bold bg-slate-800 text-slate-300 hover:bg-slate-700">Game 3</button>
-                        </div>
-                    </div>
-                    <button id="btn-save-scorecard" class="w-full sm:w-auto px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition shadow-lg shadow-emerald-600/20">
-                        <i data-lucide="check-circle" class="w-4 h-4"></i> Save Game Scores
-                    </button>
-                </div>
-
-                <!-- Frame Scoring Table -->
-                <div id="scorecard-grid-container" class="overflow-x-auto border border-slate-800 rounded-xl bg-slate-950/90">
-                    <!-- JS populated -->
-                </div>
-            </div>
-        </section>
-
-        <!-- TAB 3: OVERHEAD GEMINI OCR SCANNER -->
-        <section id="tab-ocr" class="tab-content hidden space-y-6">
-            <div class="glass-panel p-6 rounded-2xl space-y-6">
-                <div>
-                    <h2 class="text-xl font-bold text-slate-100 flex items-center gap-2">
-                        <i data-lucide="scan" class="text-amber-500 w-5 h-5"></i> AI Overhead Scoreboard Scanner
-                    </h2>
-                    <p class="text-slate-400 text-sm">Upload a photo of your lane's overhead monitor. Gemini AI Vision will read bowler names and 10-frame pinfalls automatically.</p>
-                </div>
-
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <!-- Config and Dropzone -->
-                    <div class="space-y-4">
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Target League</label>
-                                <select id="ocr-league-select" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-slate-100 focus:outline-none">
-                                    <option value="">-- Choose League --</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Target Team</label>
-                                <select id="ocr-team-select" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-slate-100 focus:outline-none" disabled>
-                                    <option value="">-- Choose Team --</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <!-- Image File Dropzone -->
-                        <div id="ocr-dropzone" class="border-2 border-dashed border-slate-700 hover:border-amber-500 rounded-xl p-8 text-center cursor-pointer transition bg-slate-900/40 hover:bg-slate-900/80 group">
-                            <input type="file" id="ocr-file-input" accept="image/*" class="hidden">
-                            <i data-lucide="image-plus" class="w-10 h-10 mx-auto text-slate-500 group-hover:text-amber-400 transition mb-2"></i>
-                            <p class="text-sm font-semibold text-slate-300">Click or Drag & Drop Scoreboard Photo</p>
-                            <p class="text-xs text-slate-500 mt-1">Supports bowling alley overhead monitor photos (JPG, PNG, WEBP)</p>
-                        </div>
-
-                        <!-- Image Preview Box -->
-                        <div id="ocr-preview-container" class="hidden relative rounded-xl overflow-hidden border border-slate-700 bg-slate-950 max-h-64 flex items-center justify-center">
-                            <img id="ocr-image-preview" class="max-h-64 object-contain" alt="Scoreboard Monitor Preview">
-                            <button id="btn-clear-ocr-img" class="absolute top-2 right-2 p-1.5 bg-slate-900/80 hover:bg-red-600 rounded-full text-slate-300 transition">
-                                <i data-lucide="x" class="w-4 h-4"></i>
-                            </button>
-                        </div>
-
-                        <button id="btn-run-ocr" class="w-full py-3 bg-gradient-to-r from-amber-500 via-orange-500 to-red-600 hover:from-amber-600 hover:to-red-700 text-slate-950 font-bold rounded-xl shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2 text-sm transition disabled:opacity-50" disabled>
-                            <i data-lucide="sparkles" class="w-4 h-4"></i> Analyze Scoreboard with Gemini AI
-                        </button>
-                    </div>
-
-                    <!-- Extraction Result Board -->
-                    <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-4 flex flex-col justify-between">
-                        <div>
-                            <h3 class="text-sm font-bold text-slate-200 border-b border-slate-800 pb-2 flex items-center justify-between">
-                                <span>AI Extracted Bowler Scores</span>
-                                <span id="ocr-status-badge" class="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full">Awaiting Upload</span>
-                            </h3>
-
-                            <div id="ocr-results-area" class="py-8 text-center text-xs text-slate-500 space-y-2">
-                                <i data-lucide="cpu" class="w-8 h-8 mx-auto opacity-30"></i>
-                                <p>Upload a scoreboard photo to scan frame-by-frame values.</p>
-                            </div>
-                        </div>
-
-                        <div id="ocr-apply-footer" class="hidden pt-3 border-t border-slate-800">
-                            <button id="btn-apply-ocr-scores" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-600/20">
-                                <i data-lucide="arrow-right-circle" class="w-4 h-4"></i> Apply Scores to Active Scorecard
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- TAB 4: ANALYTICS DASHBOARD -->
-        <section id="tab-analytics" class="tab-content hidden space-y-6">
-            <!-- Stat KPI Cards -->
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div class="glass-panel p-4 rounded-xl border border-slate-800">
-                    <span class="text-xs font-semibold text-slate-400 uppercase">Games Logged</span>
-                    <p id="stat-total-games" class="text-2xl font-extrabold text-amber-400 mt-1">0</p>
-                </div>
-                <div class="glass-panel p-4 rounded-xl border border-slate-800">
-                    <span class="text-xs font-semibold text-slate-400 uppercase">League Average</span>
-                    <p id="stat-league-avg" class="text-2xl font-extrabold text-emerald-400 mt-1">0.0</p>
-                </div>
-                <div class="glass-panel p-4 rounded-xl border border-slate-800">
-                    <span class="text-xs font-semibold text-slate-400 uppercase">High Game</span>
-                    <p id="stat-high-game" class="text-2xl font-extrabold text-sky-400 mt-1">0</p>
-                </div>
-                <div class="glass-panel p-4 rounded-xl border border-slate-800">
-                    <span class="text-xs font-semibold text-slate-400 uppercase">High 3-Game Series</span>
-                    <p id="stat-high-series" class="text-2xl font-extrabold text-purple-400 mt-1">0</p>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <!-- Trend Chart -->
-                <div class="glass-panel p-5 rounded-2xl space-y-4">
-                    <h3 class="text-sm font-bold text-slate-200 flex items-center gap-2">
-                        <i data-lucide="trending-up" class="w-4 h-4 text-amber-400"></i> Bowler Scoring Progression
-                    </h3>
-                    <div class="h-64 relative">
-                        <canvas id="chart-scores-trend"></canvas>
-                    </div>
-                </div>
-
-                <!-- Standings Table -->
-                <div class="glass-panel p-5 rounded-2xl space-y-4">
-                    <h3 class="text-sm font-bold text-slate-200 flex items-center gap-2">
-                        <i data-lucide="award" class="w-4 h-4 text-amber-400"></i> Bowler Individual Standings
-                    </h3>
-                    <div class="overflow-y-auto max-h-64">
-                        <table class="w-full text-xs text-left text-slate-300">
-                            <thead class="bg-slate-900 text-slate-400 uppercase font-semibold border-b border-slate-800">
-                                <tr>
-                                    <th class="p-2.5">Bowler</th>
-                                    <th class="p-2.5">Team</th>
-                                    <th class="p-2.5 text-center">Games</th>
-                                    <th class="p-2.5 text-right">Average</th>
-                                </tr>
-                            </thead>
-                            <tbody id="leaderboard-table-body" class="divide-y divide-slate-800">
-                                <tr>
-                                    <td colspan="4" class="p-4 text-center text-slate-500">No score records found.</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-    </main>
-
-    <!-- MODAL: API KEY SETTINGS -->
-    <div id="modal-settings" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
-                <h3 class="text-lg font-bold text-slate-100 flex items-center gap-2">
-                    <i data-lucide="key" class="w-5 h-5 text-amber-400"></i> Gemini API Key
-                </h3>
-                <button id="btn-close-settings" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
-            </div>
-            <p class="text-xs text-slate-400">Your key is kept safe locally in your browser to power AI scoreboard photo recognition.</p>
-            <div>
-                <label class="block text-xs font-semibold text-slate-300 uppercase mb-1">API Key</label>
-                <input type="password" id="input-api-key" placeholder="AIzaSy..." class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-100 focus:ring-2 focus:ring-amber-500 focus:outline-none">
-            </div>
-            <div class="pt-2 flex justify-end space-x-2">
-                <button id="btn-save-key" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-bold rounded-lg shadow">Save API Key</button>
-            </div>
-        </div>
+<body>
+  <header class="topbar">
+    <div>
+      <div class="eyebrow">BOWLING LEAGUE TRACKER</div>
+      <h1>League Night</h1>
     </div>
+    <button id="installBtn" class="ghost hidden">Install App</button>
+  </header>
 
-    <!-- MODAL: CREATE LEAGUE -->
-    <div id="modal-create-league" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
-                <h3 class="text-lg font-bold text-slate-100 flex items-center gap-2">
-                    <i data-lucide="trophy" class="w-5 h-5 text-amber-400"></i> Create Annual League
-                </h3>
-                <button id="btn-close-league-modal" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
-            </div>
+  <nav class="tabs" aria-label="Main navigation">
+    <button class="tab active" data-view="dashboard">Dashboard</button>
+    <button class="tab" data-view="setup">Leagues</button>
+    <button class="tab" data-view="night">League Night</button>
+    <button class="tab" data-view="history">History</button>
+    <button class="tab" data-view="backup">Backup</button>
+  </nav>
 
-            <form id="form-create-league" class="space-y-4">
-                <div>
-                    <label class="block text-xs font-semibold text-slate-300 uppercase mb-1">League Name</label>
-                    <input type="text" id="league-name-input" required placeholder="e.g. Tuesday Night Mixed Pins" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-100 focus:ring-2 focus:ring-amber-500 focus:outline-none">
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-300 uppercase mb-1">Season Year</label>
-                        <select id="league-year-input" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-100 focus:ring-2 focus:ring-amber-500 focus:outline-none">
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-300 uppercase mb-1">Games / Night</label>
-                        <input type="number" value="3" readonly class="w-full bg-slate-950/50 border border-slate-800 rounded-lg p-2.5 text-sm text-slate-500 cursor-not-allowed">
-                    </div>
-                </div>
-
-                <div class="pt-2 flex justify-end space-x-2">
-                    <button type="button" id="btn-cancel-league-modal" class="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-semibold rounded-lg">Cancel</button>
-                    <button type="submit" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-bold rounded-lg shadow">Create League</button>
-                </div>
-            </form>
+  <main>
+    <section id="view-dashboard" class="view active">
+      <div class="hero card">
+        <div>
+          <div class="eyebrow">CURRENT SELECTION</div>
+          <h2 id="dashTitle">No league selected</h2>
+          <p id="dashSubtitle" class="muted">Create a season, league, and team to get started.</p>
         </div>
-    </div>
-
-    <!-- MODAL: CREATE TEAM -->
-    <div id="modal-create-team" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
-                <h3 class="text-lg font-bold text-slate-100 flex items-center gap-2">
-                    <i data-lucide="users" class="w-5 h-5 text-amber-400"></i> Add Team & Roster
-                </h3>
-                <button id="btn-close-team-modal" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
-            </div>
-
-            <form id="form-create-team" class="space-y-4">
-                <input type="hidden" id="modal-target-league-id">
-                <div>
-                    <label class="block text-xs font-semibold text-slate-300 uppercase mb-1">Team Name</label>
-                    <input type="text" id="team-name-input" required placeholder="e.g. Split Happens" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-100 focus:ring-2 focus:ring-amber-500 focus:outline-none">
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold text-slate-300 uppercase mb-1">Initial Bowlers (One per line)</label>
-                    <textarea id="team-bowlers-input" rows="4" placeholder="John Doe&#10;Jane Smith&#10;Alex Rivera" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-100 focus:ring-2 focus:ring-amber-500 focus:outline-none"></textarea>
-                </div>
-
-                <div class="pt-2 flex justify-end space-x-2">
-                    <button type="button" id="btn-cancel-team-modal" class="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-semibold rounded-lg">Cancel</button>
-                    <button type="submit" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-bold rounded-lg shadow">Add Team</button>
-                </div>
-            </form>
+        <button class="primary" data-go="night">Start League Night</button>
+      </div>
+      <div id="statCards" class="stat-grid"></div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="section-title"><h3>Recent league nights</h3></div>
+          <div id="recentNights" class="empty">No league nights saved yet.</div>
         </div>
-    </div>
-
-    <!-- Toast Notification Banner -->
-    <div id="toast-container" class="fixed bottom-4 right-4 z-50 space-y-2 pointer-events-none"></div>
-
-    <script>
-        const STORAGE_KEY = 'strikescan_bowling_data_v2';
-        const API_KEY_STORAGE = 'strikescan_gemini_key';
-
-        // Core Clean App State
-        let appState = {
-            leagues: [],
-            teams: [],
-            bowlers: [],
-            scores: [],
-            activeLeagueId: null,
-            activeTeamId: null,
-            activeGameNum: 1,
-            lastOcrResult: null
-        };
-
-        function loadState() {
-            try {
-                const stored = localStorage.getItem(STORAGE_KEY);
-                if (stored) {
-                    appState = JSON.parse(stored);
-                } else {
-                    // Always start in 100% clean initial state
-                    appState = { leagues: [], teams: [], bowlers: [], scores: [] };
-                    saveState();
-                }
-            } catch (e) {
-                console.error("Failed loading state:", e);
-                appState = { leagues: [], teams: [], bowlers: [], scores: [] };
-            }
-        }
-
-        function saveState() {
-            try {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
-            } catch(e) {
-                console.error("Failed saving state:", e);
-            }
-        }
-
-        document.addEventListener('DOMContentLoaded', () => {
-            loadState();
-            initLucide();
-            populateYearOptions();
-            bindEvents();
-            renderAll();
-        });
-
-        function initLucide() {
-            if (window.lucide) window.lucide.createIcons();
-        }
-
-        function escapeHtml(str) {
-            return String(str || '').replace(/[&<>"']/g, match => {
-                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[match];
-            });
-        }
-
-        function showToast(message, type = 'info') {
-            const container = document.getElementById('toast-container');
-            const toast = document.createElement('div');
-            const bgClass = type === 'success' ? 'bg-emerald-600 text-white' : type === 'error' ? 'bg-red-600 text-white' : 'bg-slate-800 text-slate-100 border border-slate-700';
-            
-            toast.className = `px-4 py-2.5 rounded-xl shadow-xl text-xs font-medium ${bgClass} transition-all duration-300 transform translate-y-2 opacity-0 pointer-events-auto`;
-            toast.textContent = message;
-            container.appendChild(toast);
-
-            setTimeout(() => {
-                toast.classList.remove('translate-y-2', 'opacity-0');
-            }, 10);
-
-            setTimeout(() => {
-                toast.classList.add('opacity-0');
-                setTimeout(() => toast.remove(), 300);
-            }, 3000);
-        }
-
-        function populateYearOptions() {
-            const yearSelect = document.getElementById('league-year-input');
-            const currentYear = new Date().getFullYear();
-            yearSelect.innerHTML = '';
-            for (let y = currentYear + 1; y >= currentYear - 3; y--) {
-                const opt = document.createElement('option');
-                opt.value = `${y}-${y+1}`;
-                opt.textContent = `${y}-${y+1} Season`;
-                if (y === currentYear) opt.selected = true;
-                yearSelect.appendChild(opt);
-            }
-
-            const dateInput = document.getElementById('scorecard-date-input');
-            if (dateInput) {
-                dateInput.value = new Date().toISOString().split('T')[0];
-            }
-
-            const key = localStorage.getItem(API_KEY_STORAGE);
-            if (key) {
-                document.getElementById('input-api-key').value = key;
-            }
-        }
-
-        function renderAll() {
-            renderLeaguesView();
-            renderScorecardSelects();
-            renderScorecardGrid();
-            renderAnalytics();
-            initLucide();
-        }
-
-        function bindEvents() {
-            // Tab Buttons
-            document.querySelectorAll('.tab-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    document.querySelectorAll('.tab-btn').forEach(b => {
-                        b.classList.remove('border-amber-500', 'text-amber-400');
-                        b.classList.add('border-transparent', 'text-slate-400');
-                    });
-                    btn.classList.remove('border-transparent', 'text-slate-400');
-                    btn.classList.add('border-amber-500', 'text-amber-400');
-
-                    const targetTab = btn.getAttribute('data-tab');
-                    document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
-                    document.getElementById(`tab-${targetTab}`).classList.remove('hidden');
-
-                    if (targetTab === 'analytics') renderAnalytics();
-                });
-            });
-
-            // Data Wipe Control
-            document.getElementById('btn-reset-app').addEventListener('click', () => {
-                if (confirm('Are you sure you want to permanently clear all leagues, teams, bowlers, and score histories?')) {
-                    localStorage.removeItem(STORAGE_KEY);
-                    appState = { leagues: [], teams: [], bowlers: [], scores: [], activeLeagueId: null, activeTeamId: null, activeGameNum: 1 };
-                    saveState();
-                    renderAll();
-                    showToast('All league records permanently wiped', 'info');
-                }
-            });
-
-            // Settings Modal
-            document.getElementById('btn-open-settings').addEventListener('click', () => {
-                document.getElementById('modal-settings').classList.remove('hidden');
-            });
-            document.getElementById('btn-close-settings').addEventListener('click', () => {
-                document.getElementById('modal-settings').classList.add('hidden');
-            });
-            document.getElementById('btn-save-key').addEventListener('click', () => {
-                const key = document.getElementById('input-api-key').value.trim();
-                localStorage.setItem(API_KEY_STORAGE, key);
-                document.getElementById('modal-settings').classList.add('hidden');
-                showToast('Gemini API key saved to browser', 'success');
-            });
-
-            // League Creation
-            document.getElementById('btn-open-create-league').addEventListener('click', () => {
-                document.getElementById('modal-create-league').classList.remove('hidden');
-            });
-            document.getElementById('btn-close-league-modal').addEventListener('click', () => {
-                document.getElementById('modal-create-league').classList.add('hidden');
-            });
-            document.getElementById('btn-cancel-league-modal').addEventListener('click', () => {
-                document.getElementById('modal-create-league').classList.add('hidden');
-            });
-
-            document.getElementById('form-create-league').addEventListener('submit', (e) => {
-                e.preventDefault();
-                const name = document.getElementById('league-name-input').value.trim();
-                const year = document.getElementById('league-year-input').value;
-
-                if (!name) return;
-
-                const newLeague = { id: 'league_' + Date.now(), name, year };
-                appState.leagues.push(newLeague);
-                appState.activeLeagueId = newLeague.id;
-                saveState();
-
-                document.getElementById('league-name-input').value = '';
-                document.getElementById('modal-create-league').classList.add('hidden');
-                showToast(`Created league "${name}"`, 'success');
-                renderAll();
-            });
-
-            // Team Creation
-            document.getElementById('btn-close-team-modal').addEventListener('click', () => {
-                document.getElementById('modal-create-team').classList.add('hidden');
-            });
-            document.getElementById('btn-cancel-team-modal').addEventListener('click', () => {
-                document.getElementById('modal-create-team').classList.add('hidden');
-            });
-
-            document.getElementById('form-create-team').addEventListener('submit', (e) => {
-                e.preventDefault();
-                const leagueId = document.getElementById('modal-target-league-id').value;
-                const teamName = document.getElementById('team-name-input').value.trim();
-                const bowlersText = document.getElementById('team-bowlers-input').value.trim();
-
-                if (!teamName || !leagueId) return;
-
-                const newTeam = { id: 'team_' + Date.now(), leagueId, name: teamName };
-                appState.teams.push(newTeam);
-
-                if (bowlersText) {
-                    bowlersText.split('\n').forEach(line => {
-                        const bName = line.trim();
-                        if (bName) {
-                            appState.bowlers.push({
-                                id: 'bowler_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-                                teamId: newTeam.id,
-                                name: bName
-                            });
-                        }
-                    });
-                }
-
-                saveState();
-                document.getElementById('team-name-input').value = '';
-                document.getElementById('team-bowlers-input').value = '';
-                document.getElementById('modal-create-team').classList.add('hidden');
-                showToast(`Added team "${teamName}"`, 'success');
-                renderAll();
-            });
-
-            // Scorecard Dropdowns
-            document.getElementById('scorecard-league-select').addEventListener('change', (e) => {
-                appState.activeLeagueId = e.target.value;
-                appState.activeTeamId = null;
-                renderScorecardSelects();
-                renderScorecardGrid();
-            });
-
-            document.getElementById('scorecard-team-select').addEventListener('change', (e) => {
-                appState.activeTeamId = e.target.value;
-                renderScorecardGrid();
-            });
-
-            document.querySelectorAll('.game-num-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    document.querySelectorAll('.game-num-btn').forEach(b => {
-                        b.classList.remove('bg-amber-500', 'text-slate-950');
-                        b.classList.add('bg-slate-800', 'text-slate-300');
-                    });
-                    btn.classList.remove('bg-slate-800', 'text-slate-300');
-                    btn.classList.add('bg-amber-500', 'text-slate-950');
-
-                    appState.activeGameNum = parseInt(btn.getAttribute('data-game'), 10);
-                    renderScorecardGrid();
-                });
-            });
-
-            document.getElementById('btn-save-scorecard').addEventListener('click', saveActiveScorecard);
-
-            setupOcrEvents();
-        }
-
-        function renderLeaguesView() {
-            const container = document.getElementById('leagues-container');
-            container.innerHTML = '';
-
-            if (appState.leagues.length === 0) {
-                container.innerHTML = `
-                    <div class="col-span-full border-2 border-dashed border-slate-800 rounded-2xl p-12 text-center bg-slate-900/40">
-                        <div class="p-3 bg-slate-800 w-12 h-12 rounded-full mx-auto mb-3 flex items-center justify-center text-amber-500">
-                            <i data-lucide="trophy" class="w-6 h-6"></i>
-                        </div>
-                        <h3 class="text-base font-bold text-slate-200">No Active Leagues</h3>
-                        <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">Create your seasonal league to register teams, manage bowler rosters, and log weekly series.</p>
-                        <button onclick="document.getElementById('modal-create-league').classList.remove('hidden')" class="mt-4 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-lg text-xs transition shadow">
-                            + Create First League
-                        </button>
-                    </div>
-                `;
-                return;
-            }
-
-            appState.leagues.forEach(league => {
-                const teamsInLeague = appState.teams.filter(t => t.leagueId === league.id);
-                
-                const card = document.createElement('div');
-                card.className = "glass-panel p-5 rounded-2xl space-y-4 border border-slate-800 flex flex-col justify-between";
-
-                let teamsHtml = teamsInLeague.length === 0 
-                    ? `<p class="text-xs text-slate-500 italic">No teams registered yet.</p>` 
-                    : teamsInLeague.map(team => {
-                        const bowlers = appState.bowlers.filter(b => b.teamId === team.id);
-                        return `
-                            <div class="bg-slate-950/80 border border-slate-800 p-3 rounded-xl space-y-2">
-                                <div class="flex justify-between items-center">
-                                    <span class="font-bold text-xs text-amber-400 flex items-center gap-1.5">
-                                        <i data-lucide="users" class="w-3.5 h-3.5"></i> ${escapeHtml(team.name)}
-                                    </span>
-                                    <button onclick="deleteTeam('${team.id}')" class="text-slate-500 hover:text-red-400 p-1 transition">
-                                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-                                    </button>
-                                </div>
-                                <div class="text-[11px] text-slate-400 pl-2 border-l border-slate-800 space-y-1">
-                                    ${bowlers.length ? bowlers.map(b => `<div class="flex justify-between items-center"><span>${escapeHtml(b.name)}</span></div>`).join('') : '<span class="text-slate-600 italic">No bowlers registered</span>'}
-                                </div>
-                                <div class="pt-1 flex justify-end">
-                                    <button onclick="promptAddBowler('${team.id}')" class="text-[10px] text-amber-400 hover:text-amber-300 font-semibold">
-                                        + Add Bowler
-                                    </button>
-                                </div>
-                            </div>
-                        `;
-                    }).join('');
-
-                card.innerHTML = `
-                    <div>
-                        <div class="flex justify-between items-start border-b border-slate-800 pb-3">
-                            <div>
-                                <span class="text-[10px] uppercase font-bold text-amber-500 tracking-wider">${league.year} Season</span>
-                                <h2 class="text-lg font-bold text-slate-100">${escapeHtml(league.name)}</h2>
-                            </div>
-                            <button onclick="deleteLeague('${league.id}')" class="text-slate-500 hover:text-red-400 p-1.5 transition">
-                                <i data-lucide="trash" class="w-4 h-4"></i>
-                            </button>
-                        </div>
-                        <div class="mt-4 space-y-3">
-                            <span class="text-xs font-semibold text-slate-400 uppercase">Teams & Roster</span>
-                            ${teamsHtml}
-                        </div>
-                    </div>
-                    <div class="pt-4">
-                        <button onclick="openAddTeamModal('${league.id}')" class="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg transition border border-slate-700 flex items-center justify-center gap-1.5">
-                            <i data-lucide="plus" class="w-3.5 h-3.5"></i> Add New Team
-                        </button>
-                    </div>
-                `;
-
-                container.appendChild(card);
-            });
-        }
-
-        function renderScorecardSelects() {
-            const leagueSelect = document.getElementById('scorecard-league-select');
-            const teamSelect = document.getElementById('scorecard-team-select');
-            const ocrLeagueSelect = document.getElementById('ocr-league-select');
-            const ocrTeamSelect = document.getElementById('ocr-team-select');
-
-            const currentLeague = appState.activeLeagueId;
-            const currentTeam = appState.activeTeamId;
-
-            leagueSelect.innerHTML = '<option value="">-- Choose League --</option>';
-            ocrLeagueSelect.innerHTML = '<option value="">-- Choose League --</option>';
-
-            appState.leagues.forEach(l => {
-                const opt = document.createElement('option');
-                opt.value = l.id;
-                opt.textContent = `${l.name} (${l.year})`;
-                if (l.id === currentLeague) opt.selected = true;
-
-                const opt2 = opt.cloneNode(true);
-                leagueSelect.appendChild(opt);
-                ocrLeagueSelect.appendChild(opt2);
-            });
-
-            teamSelect.innerHTML = '<option value="">-- Choose Team --</option>';
-            ocrTeamSelect.innerHTML = '<option value="">-- Choose Team --</option>';
-
-            if (currentLeague) {
-                teamSelect.disabled = false;
-                ocrTeamSelect.disabled = false;
-
-                const teams = appState.teams.filter(t => t.leagueId === currentLeague);
-                teams.forEach(t => {
-                    const opt = document.createElement('option');
-                    opt.value = t.id;
-                    opt.textContent = t.name;
-                    if (t.id === currentTeam) opt.selected = true;
-
-                    const opt2 = opt.cloneNode(true);
-                    teamSelect.appendChild(opt);
-                    ocrTeamSelect.appendChild(opt2);
-                });
-            } else {
-                teamSelect.disabled = true;
-                ocrTeamSelect.disabled = true;
-            }
-        }
-
-        function renderScorecardGrid() {
-            const container = document.getElementById('scorecard-grid-container');
-
-            if (!appState.activeLeagueId || !appState.activeTeamId) {
-                container.innerHTML = `
-                    <div class="p-8 text-center text-slate-500 text-xs">
-                        Select an active League and Team above to launch the interactive 10-frame scorecard.
-                    </div>
-                `;
-                return;
-            }
-
-            const bowlers = appState.bowlers.filter(b => b.teamId === appState.activeTeamId);
-
-            if (bowlers.length === 0) {
-                container.innerHTML = `
-                    <div class="p-8 text-center text-slate-500 text-xs space-y-2">
-                        <p>No bowlers assigned to this team roster.</p>
-                        <button onclick="promptAddBowler('${appState.activeTeamId}')" class="px-3 py-1.5 bg-amber-500 text-slate-950 font-bold rounded-lg text-xs">
-                            + Add Bowlers to Team
-                        </button>
-                    </div>
-                `;
-                return;
-            }
-
-            const dateVal = document.getElementById('scorecard-date-input').value;
-
-            let tableHtml = `
-                <table class="w-full text-xs text-left text-slate-200 border-collapse">
-                    <thead class="bg-slate-900 text-slate-400 font-bold uppercase border-b border-slate-800">
-                        <tr>
-                            <th class="p-3 w-40">Bowler</th>
-                            ${Array.from({length: 9}, (_, i) => `<th class="p-2 text-center border-l border-slate-800">F${i+1}</th>`).join('')}
-                            <th class="p-2 text-center border-l border-slate-800 w-24">F10</th>
-                            <th class="p-3 text-center border-l border-slate-800 text-amber-400">Total</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-800/80">
-            `;
-
-            bowlers.forEach(bowler => {
-                const existingScore = appState.scores.find(s => 
-                    s.leagueId === appState.activeLeagueId &&
-                    s.teamId === appState.activeTeamId &&
-                    s.bowlerId === bowler.id &&
-                    s.gameNumber === appState.activeGameNum &&
-                    s.date === dateVal
-                );
-
-                const frames = existingScore ? existingScore.frames : Array.from({length: 10}, () => ({ r1: '', r2: '', r3: '' }));
-
-                tableHtml += `<tr data-bowler-id="${bowler.id}">`;
-                tableHtml += `<td class="p-3 font-semibold text-slate-100">
-                                <span>${escapeHtml(bowler.name)}</span>
-                              </td>`;
-
-                for (let f = 0; f < 9; f++) {
-                    const frame = frames[f] || { r1: '', r2: '' };
-                    tableHtml += `
-                        <td class="p-1 border-l border-slate-800/60 align-top">
-                            <div class="flex border border-slate-800 rounded overflow-hidden text-center bg-slate-950">
-                                <input type="text" maxlength="2" data-bowler="${bowler.id}" data-frame="${f}" data-roll="1" value="${frame.r1 || ''}" class="frame-input w-1/2 bg-transparent py-1 text-center font-mono font-bold focus:bg-amber-500/20 focus:outline-none uppercase">
-                                <input type="text" maxlength="2" data-bowler="${bowler.id}" data-frame="${f}" data-roll="2" value="${frame.r2 || ''}" class="frame-input w-1/2 border-l border-slate-800 bg-transparent py-1 text-center font-mono font-bold focus:bg-amber-500/20 focus:outline-none uppercase">
-                            </div>
-                            <div class="text-[10px] text-center font-mono text-slate-400 mt-1" id="subtotal-${bowler.id}-${f}">-</div>
-                        </td>
-                    `;
-                }
-
-                const f10 = frames[9] || { r1: '', r2: '', r3: '' };
-                tableHtml += `
-                    <td class="p-1 border-l border-slate-800/60 align-top">
-                        <div class="flex border border-slate-800 rounded overflow-hidden text-center bg-slate-950">
-                            <input type="text" maxlength="2" data-bowler="${bowler.id}" data-frame="9" data-roll="1" value="${f10.r1 || ''}" class="frame-input w-1/3 bg-transparent py-1 text-center font-mono font-bold focus:bg-amber-500/20 focus:outline-none uppercase">
-                            <input type="text" maxlength="2" data-bowler="${bowler.id}" data-frame="9" data-roll="2" value="${f10.r2 || ''}" class="frame-input w-1/3 border-l border-slate-800 bg-transparent py-1 text-center font-mono font-bold focus:bg-amber-500/20 focus:outline-none uppercase">
-                            <input type="text" maxlength="2" data-bowler="${bowler.id}" data-frame="9" data-roll="3" value="${f10.r3 || ''}" class="frame-input w-1/3 border-l border-slate-800 bg-transparent py-1 text-center font-mono font-bold focus:bg-amber-500/20 focus:outline-none uppercase">
-                        </div>
-                        <div class="text-[10px] text-center font-mono text-slate-400 mt-1" id="subtotal-${bowler.id}-9">-</div>
-                    </td>
-                `;
-
-                tableHtml += `<td class="p-3 border-l border-slate-800 text-center font-mono font-bold text-base text-amber-400" id="grandtotal-${bowler.id}">0</td>`;
-                tableHtml += `</tr>`;
-            });
-
-            tableHtml += `</tbody></table>`;
-            container.innerHTML = tableHtml;
-
-            bowlers.forEach(b => recalculateBowlerScore(b.id));
-
-            container.querySelectorAll('.frame-input').forEach(input => {
-                input.addEventListener('input', (e) => {
-                    const bowlerId = e.target.getAttribute('data-bowler');
-                    recalculateBowlerScore(bowlerId);
-                });
-            });
-        }
-
-        function recalculateBowlerScore(bowlerId) {
-            const inputs = document.querySelectorAll(`.frame-input[data-bowler="${bowlerId}"]`);
-            const frames = Array.from({length: 10}, () => ({ r1: '', r2: '', r3: '' }));
-
-            inputs.forEach(inp => {
-                const f = parseInt(inp.getAttribute('data-frame'), 10);
-                const r = inp.getAttribute('data-roll');
-                frames[f][`r${r}`] = inp.value.trim().toUpperCase();
-            });
-
-            function parseRoll(val) {
-                if (val === 'X') return 10;
-                if (val === '-' || val === 'F') return 0;
-                const num = parseInt(val, 10);
-                return isNaN(num) ? 0 : num;
-            }
-
-            let runningTotal = 0;
-
-            for (let f = 0; f < 10; f++) {
-                const frame = frames[f];
-                let frameScore = 0;
-
-                if (f < 9) {
-                    if (frame.r1 === 'X') {
-                        let bonus = 0;
-                        const nextF1 = frames[f+1];
-                        if (nextF1) {
-                            if (nextF1.r1 === 'X') {
-                                bonus += 10;
-                                if (f === 8) {
-                                    bonus += parseRoll(nextF1.r2);
-                                } else {
-                                    const nextF2 = frames[f+2];
-                                    if (nextF2) bonus += (nextF2.r1 === 'X' ? 10 : parseRoll(nextF2.r1));
-                                }
-                            } else {
-                                bonus += parseRoll(nextF1.r1);
-                                if (nextF1.r2 === '/') bonus = 10;
-                                else bonus += parseRoll(nextF1.r2);
-                            }
-                        }
-                        frameScore = 10 + bonus;
-                    } else if (frame.r2 === '/') {
-                        let bonus = 0;
-                        const nextF1 = frames[f+1];
-                        if (nextF1) bonus += (nextF1.r1 === 'X' ? 10 : parseRoll(nextF1.r1));
-                        frameScore = 10 + bonus;
-                    } else {
-                        frameScore = parseRoll(frame.r1) + parseRoll(frame.r2);
-                    }
-                } else {
-                    const r1 = parseRoll(frame.r1);
-                    let r2 = frame.r2 === '/' ? (10 - r1) : parseRoll(frame.r2);
-                    let r3 = parseRoll(frame.r3);
-                    frameScore = r1 + r2 + r3;
-                }
-
-                runningTotal += frameScore;
-                const subtotalEl = document.getElementById(`subtotal-${bowlerId}-${f}`);
-                if (subtotalEl) {
-                    subtotalEl.textContent = (frame.r1 || frame.r2) ? runningTotal : '-';
-                }
-            }
-
-            const grandTotalEl = document.getElementById(`grandtotal-${bowlerId}`);
-            if (grandTotalEl) grandTotalEl.textContent = runningTotal;
-        }
-
-        function saveActiveScorecard() {
-            if (!appState.activeLeagueId || !appState.activeTeamId) {
-                showToast('Select an active League and Team first', 'error');
-                return;
-            }
-
-            const dateVal = document.getElementById('scorecard-date-input').value;
-            const bowlers = appState.bowlers.filter(b => b.teamId === appState.activeTeamId);
-
-            bowlers.forEach(bowler => {
-                const inputs = document.querySelectorAll(`.frame-input[data-bowler="${bowler.id}"]`);
-                const frames = Array.from({length: 10}, () => ({ r1: '', r2: '', r3: '' }));
-
-                inputs.forEach(inp => {
-                    const f = parseInt(inp.getAttribute('data-frame'), 10);
-                    const r = inp.getAttribute('data-roll');
-                    frames[f][`r${r}`] = inp.value.trim().toUpperCase();
-                });
-
-                const existingIdx = appState.scores.findIndex(s => 
-                    s.leagueId === appState.activeLeagueId &&
-                    s.teamId === appState.activeTeamId &&
-                    s.bowlerId === bowler.id &&
-                    s.gameNumber === appState.activeGameNum &&
-                    s.date === dateVal
-                );
-
-                const scoreObj = {
-                    id: existingIdx >= 0 ? appState.scores[existingIdx].id : 'score_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-                    leagueId: appState.activeLeagueId,
-                    teamId: appState.activeTeamId,
-                    bowlerId: bowler.id,
-                    gameNumber: appState.activeGameNum,
-                    date: dateVal,
-                    frames: frames
-                };
-
-                if (existingIdx >= 0) appState.scores[existingIdx] = scoreObj;
-                else appState.scores.push(scoreObj);
-            });
-
-            saveState();
-            showToast(`Saved Game ${appState.activeGameNum} scores successfully`, 'success');
-        }
-
-        function setupOcrEvents() {
-            const dropzone = document.getElementById('ocr-dropzone');
-            const fileInput = document.getElementById('ocr-file-input');
-            const previewContainer = document.getElementById('ocr-preview-container');
-            const previewImg = document.getElementById('ocr-image-preview');
-            const btnClear = document.getElementById('btn-clear-ocr-img');
-            const btnRun = document.getElementById('btn-run-ocr');
-
-            let base64Image = null;
-
-            dropzone.addEventListener('click', () => fileInput.click());
-
-            fileInput.addEventListener('change', (e) => {
-                const file = e.target.files[0];
-                if (file) {
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        base64Image = e.target.result;
-                        previewImg.src = base64Image;
-                        previewContainer.classList.remove('hidden');
-                        dropzone.classList.add('hidden');
-                        btnRun.disabled = false;
-                    };
-                    reader.readAsDataURL(file);
-                }
-            });
-
-            btnClear.addEventListener('click', () => {
-                base64Image = null;
-                fileInput.value = '';
-                previewContainer.classList.add('hidden');
-                dropzone.classList.remove('hidden');
-                btnRun.disabled = true;
-                document.getElementById('ocr-results-area').innerHTML = `
-                    <i data-lucide="cpu" class="w-8 h-8 mx-auto opacity-30"></i>
-                    <p class="text-xs text-slate-500">Upload a scoreboard photo to scan frame-by-frame values.</p>
-                `;
-                document.getElementById('ocr-apply-footer').classList.add('hidden');
-                initLucide();
-            });
-
-            btnRun.addEventListener('click', async () => {
-                if (!base64Image) return;
-
-                const apiKey = localStorage.getItem(API_KEY_STORAGE) || "";
-                if (!apiKey) {
-                    showToast('Please set your Gemini API key in settings first', 'error');
-                    document.getElementById('modal-settings').classList.remove('hidden');
-                    return;
-                }
-
-                const statusBadge = document.getElementById('ocr-status-badge');
-                const resultsArea = document.getElementById('ocr-results-area');
-
-                statusBadge.textContent = 'Scanning...';
-                statusBadge.className = 'text-[10px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full animate-pulse';
-
-                resultsArea.innerHTML = `
-                    <div class="py-8 space-y-3">
-                        <div class="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-                        <p class="text-xs font-semibold text-slate-300">Analyzing Overhead Monitor with Gemini AI...</p>
-                    </div>
-                `;
-
-                try {
-                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
-                    const rawBase64 = base64Image.split(',')[1];
-
-                    const prompt = `Parse this bowling overhead monitor picture. Extract bowler names and 10-frame scores into JSON format:
-                    [
-                      {
-                        "bowlerName": "John",
-                        "frames": [{"r1": "X", "r2": ""}, {"r1": "9", "r2": "/"}]
-                      }
-                    ]
-                    Use standard bowling notation ('X' for strike, '/' for spare, '-' for gutter, numbers for pin count). Return ONLY valid JSON array without markdown formatting.`;
-
-                    const response = await fetch(apiUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            contents: [{
-                                parts: [
-                                    { text: prompt },
-                                    { inlineData: { mimeType: "image/png", data: rawBase64 } }
-                                ]
-                            }]
-                        })
-                    });
-
-                    const data = await response.json();
-                    const textRes = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-                    const jsonMatch = textRes.match(/\[.*\]/s);
-
-                    if (!jsonMatch) throw new Error("Could not parse structured scoring JSON");
-
-                    const parsedData = JSON.parse(jsonMatch[0]);
-                    appState.lastOcrResult = parsedData;
-
-                    statusBadge.textContent = 'Completed';
-                    statusBadge.className = 'text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full';
-
-                    renderOcrResults(parsedData);
-
-                } catch (err) {
-                    console.error("OCR API error:", err);
-                    statusBadge.textContent = 'Failed';
-                    statusBadge.className = 'text-[10px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full';
-                    resultsArea.innerHTML = `<div class="p-4 text-xs text-red-400">Failed to extract scores. Verify API Key and photo clarity.</div>`;
-                }
-            });
-
-            document.getElementById('btn-apply-ocr-scores').addEventListener('click', applyOcrScoresToActiveTeam);
-        }
-
-        function renderOcrResults(data) {
-            const resultsArea = document.getElementById('ocr-results-area');
-            const applyFooter = document.getElementById('ocr-apply-footer');
-
-            if (!data || data.length === 0) {
-                resultsArea.innerHTML = `<p class="text-xs text-slate-500">No bowler scores detected.</p>`;
-                applyFooter.classList.add('hidden');
-                return;
-            }
-
-            let html = `<div class="space-y-3 max-h-60 overflow-y-auto pr-1">`;
-            data.forEach((item, idx) => {
-                html += `
-                    <div class="bg-slate-950 p-2.5 rounded-lg border border-slate-800 text-left">
-                        <span class="font-bold text-amber-400 text-xs">${escapeHtml(item.bowlerName || 'Bowler ' + (idx+1))}</span>
-                        <div class="grid grid-cols-10 gap-1 mt-1.5 font-mono text-[10px] text-center">
-                            ${(item.frames || []).slice(0, 10).map((f, i) => `
-                                <div class="bg-slate-900 border border-slate-800 p-1 rounded">
-                                    <div class="text-slate-500 text-[8px]">F${i+1}</div>
-                                    <div class="font-bold text-slate-100">${f.r1 || '-'}${f.r2 ? '/'+f.r2 : ''}</div>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-                `;
-            });
-            html += `</div>`;
-
-            resultsArea.innerHTML = html;
-            applyFooter.classList.remove('hidden');
-        }
-
-        function applyOcrScoresToActiveTeam() {
-            const targetTeamId = document.getElementById('ocr-team-select').value;
-            if (!targetTeamId) {
-                showToast('Select a target team to apply OCR scores.', 'error');
-                return;
-            }
-
-            const teamBowlers = appState.bowlers.filter(b => b.teamId === targetTeamId);
-            const ocrResults = appState.lastOcrResult || [];
-
-            appState.activeLeagueId = document.getElementById('ocr-league-select').value;
-            appState.activeTeamId = targetTeamId;
-
-            document.querySelectorAll('.tab-btn')[1].click();
-
-            setTimeout(() => {
-                teamBowlers.forEach((bowler, bIdx) => {
-                    const matchData = ocrResults[bIdx] || ocrResults.find(o => o.bowlerName && o.bowlerName.toLowerCase().includes(bowler.name.toLowerCase()));
-                    if (matchData && matchData.frames) {
-                        matchData.frames.forEach((f, fIdx) => {
-                            if (fIdx < 10) {
-                                const r1Inp = document.querySelector(`.frame-input[data-bowler="${bowler.id}"][data-frame="${fIdx}"][data-roll="1"]`);
-                                const r2Inp = document.querySelector(`.frame-input[data-bowler="${bowler.id}"][data-frame="${fIdx}"][data-roll="2"]`);
-                                const r3Inp = document.querySelector(`.frame-input[data-bowler="${bowler.id}"][data-frame="${fIdx}"][data-roll="3"]`);
-
-                                if (r1Inp) r1Inp.value = f.r1 || '';
-                                if (r2Inp) r2Inp.value = f.r2 || '';
-                                if (r3Inp) r3Inp.value = f.r3 || '';
-                            }
-                        });
-                        recalculateBowlerScore(bowler.id);
-                    }
-                });
-                showToast('OCR Scores mapped to active scorecard!', 'success');
-            }, 100);
-        }
-
-        let scoreChart = null;
-
-        function renderAnalytics() {
-            const totalGamesEl = document.getElementById('stat-total-games');
-            const leagueAvgEl = document.getElementById('stat-league-avg');
-            const highGameEl = document.getElementById('stat-high-game');
-            const leaderboardBody = document.getElementById('leaderboard-table-body');
-
-            if (appState.scores.length === 0) {
-                totalGamesEl.textContent = '0';
-                leagueAvgEl.textContent = '0.0';
-                highGameEl.textContent = '0';
-                leaderboardBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-slate-500">No score records logged yet.</td></tr>`;
-                renderChart([]);
-                return;
-            }
-
-            let totalPins = 0;
-            let totalGames = appState.scores.length;
-            let highestGame = 0;
-            let bowlerTotals = {};
-
-            appState.scores.forEach(s => {
-                let gTotal = 0;
-                s.frames.forEach(f => {
-                    const r1 = parseInt(f.r1, 10) || (f.r1 === 'X' ? 10 : 0);
-                    const r2 = parseInt(f.r2, 10) || (f.r2 === '/' ? 10 : 0);
-                    const r3 = parseInt(f.r3, 10) || 0;
-                    gTotal += (r1 + r2 + r3);
-                });
-
-                totalPins += gTotal;
-                if (gTotal > highestGame) highestGame = gTotal;
-
-                if (!bowlerTotals[s.bowlerId]) {
-                    const b = appState.bowlers.find(x => x.id === s.bowlerId);
-                    const t = appState.teams.find(x => x.id === s.teamId);
-                    bowlerTotals[s.bowlerId] = {
-                        name: b ? b.name : 'Unknown',
-                        teamName: t ? t.name : 'Unassigned',
-                        pins: 0,
-                        games: 0
-                    };
-                }
-                bowlerTotals[s.bowlerId].pins += gTotal;
-                bowlerTotals[s.bowlerId].games += 1;
-            });
-
-            totalGamesEl.textContent = totalGames;
-            leagueAvgEl.textContent = (totalPins / (totalGames || 1)).toFixed(1);
-            highGameEl.textContent = highestGame;
-
-            const leaderboard = Object.values(bowlerTotals).sort((a,b) => (b.pins / b.games) - (a.pins / a.games));
-            leaderboardBody.innerHTML = leaderboard.map(item => `
-                <tr>
-                    <td class="p-2.5 font-bold text-slate-100">${escapeHtml(item.name)}</td>
-                    <td class="p-2.5 text-slate-400">${escapeHtml(item.teamName)}</td>
-                    <td class="p-2.5 text-center text-slate-300 font-mono">${item.games}</td>
-                    <td class="p-2.5 text-right font-bold text-amber-400 font-mono">${(item.pins / item.games).toFixed(1)}</td>
-                </tr>
-            `).join('');
-
-            renderChart(appState.scores);
-        }
-
-        function renderChart(scores) {
-            const ctx = document.getElementById('chart-scores-trend').getContext('2d');
-            if (scoreChart) scoreChart.destroy();
-
-            const dates = [...new Set(scores.map(s => s.date))].sort();
-            const topBowlers = appState.bowlers.slice(0, 3);
-            const colors = ['#f59e0b', '#38bdf8', '#10b981'];
-
-            const datasets = topBowlers.map((bowler, idx) => {
-                const dataPoints = dates.map(d => {
-                    const bScores = scores.filter(s => s.bowlerId === bowler.id && s.date === d);
-                    if (bScores.length === 0) return null;
-                    let sum = 0;
-                    bScores.forEach(s => {
-                        s.frames.forEach(f => {
-                            sum += (parseInt(f.r1, 10) || (f.r1 === 'X' ? 10 : 0));
-                        });
-                    });
-                    return sum;
-                });
-
-                return {
-                    label: bowler.name,
-                    data: dataPoints,
-                    borderColor: colors[idx % colors.length],
-                    backgroundColor: colors[idx % colors.length] + '20',
-                    tension: 0.3,
-                    fill: true
-                };
-            });
-
-            scoreChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: dates.length ? dates : ['No Data'],
-                    datasets: datasets.length ? datasets : [{ label: 'Average Score', data: [0], borderColor: '#64748b' }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { labels: { color: '#94a3b8', font: { family: 'Inter', size: 11 } } } },
-                    scales: {
-                        x: { ticks: { color: '#64748b' }, grid: { color: '#1e293b' } },
-                        y: { ticks: { color: '#64748b' }, grid: { color: '#1e293b' }, min: 0, max: 300 }
-                    }
-                }
-            });
-        }
-
-        function openAddTeamModal(leagueId) {
-            document.getElementById('modal-target-league-id').value = leagueId;
-            document.getElementById('modal-create-team').classList.remove('hidden');
-        }
-
-        function promptAddBowler(teamId) {
-            const name = prompt("Enter bowler's full name:");
-            if (name && name.trim()) {
-                appState.bowlers.push({
-                    id: 'bowler_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-                    teamId: teamId,
-                    name: name.trim()
-                });
-                saveState();
-                renderAll();
-                showToast(`Added bowler "${name.trim()}"`, 'success');
-            }
-        }
-
-        function deleteTeam(teamId) {
-            if (confirm("Delete this team and its bowlers?")) {
-                appState.teams = appState.teams.filter(t => t.id !== teamId);
-                appState.bowlers = appState.bowlers.filter(b => b.teamId !== teamId);
-                appState.scores = appState.scores.filter(s => s.teamId !== teamId);
-                saveState();
-                renderAll();
-                showToast('Team deleted', 'info');
-            }
-        }
-
-        function deleteLeague(leagueId) {
-            if (confirm("Delete this league, its teams, rosters, and scores?")) {
-                const teamIds = appState.teams.filter(t => t.leagueId === leagueId).map(t => t.id);
-                appState.leagues = appState.leagues.filter(l => l.id !== leagueId);
-                appState.teams = appState.teams.filter(t => t.leagueId !== leagueId);
-                appState.bowlers = appState.bowlers.filter(b => !teamIds.includes(b.teamId));
-                appState.scores = appState.scores.filter(s => s.leagueId !== leagueId);
-                saveState();
-                renderAll();
-                showToast('League deleted', 'info');
-            }
-        }
-    </script>
+        <div class="card">
+          <div class="section-title"><h3>High scores</h3></div>
+          <div id="highScores" class="empty">Scores will appear here.</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-setup" class="view">
+      <div class="grid-2">
+        <div class="card">
+          <h2>Season & League</h2>
+          <label>Season
+            <select id="seasonSelect"></select>
+          </label>
+          <div class="row">
+            <input id="newSeasonName" placeholder="2026–2027" />
+            <button id="addSeasonBtn">Add season</button>
+          </div>
+          <label>League
+            <select id="leagueSelect"></select>
+          </label>
+          <div class="row">
+            <input id="newLeagueName" placeholder="Thursday Night Mixed" />
+            <button id="addLeagueBtn">Add league</button>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Team</h2>
+          <label>Team
+            <select id="teamSelect"></select>
+          </label>
+          <div class="row">
+            <input id="newTeamName" placeholder="Pin Crushers" />
+            <button id="addTeamBtn">Add team</button>
+          </div>
+          <h3>Bowlers</h3>
+          <div class="row">
+            <input id="newBowlerName" placeholder="Bowler name" />
+            <button id="addBowlerBtn">Add bowler</button>
+          </div>
+          <div id="bowlerList"></div>
+        </div>
+      </div>
+      <div class="card notice">
+        <strong>Each year stays separate.</strong> Create a new season, then create or reuse league/team names inside that season. Your history and statistics remain tied to the correct year.
+      </div>
+    </section>
+
+    <section id="view-night" class="view">
+      <div class="card">
+        <div class="section-title wrap">
+          <div>
+            <div class="eyebrow">LEAGUE NIGHT</div>
+            <h2 id="nightSelection">Choose a league and team</h2>
+          </div>
+          <label class="date-label">Date<input type="date" id="nightDate" /></label>
+        </div>
+        <div class="selector-row">
+          <label>Season<select id="nightSeasonSelect"></select></label>
+          <label>League<select id="nightLeagueSelect"></select></label>
+          <label>Team<select id="nightTeamSelect"></select></label>
+        </div>
+      </div>
+
+      <div class="card ocr-card">
+        <div class="section-title wrap">
+          <div>
+            <h2>Scoreboard Photo OCR</h2>
+            <p class="muted">Upload or take a photo. The site reads it locally in your browser, then lets you review every frame before saving.</p>
+          </div>
+          <span class="badge beta">BETA</span>
+        </div>
+        <input id="scoreboardImage" type="file" accept="image/*" capture="environment" />
+        <div id="imagePreviewWrap" class="hidden"><img id="imagePreview" alt="Scoreboard preview" /></div>
+        <div class="row wrap">
+          <button id="runOcrBtn" class="primary">Read Scoreboard</button>
+          <button id="applyOcrBtn" class="ghost" disabled>Apply OCR to Score Sheet</button>
+        </div>
+        <div id="ocrProgress" class="progress hidden"><div id="ocrProgressBar"></div></div>
+        <div id="ocrStatus" class="muted small"></div>
+        <details id="ocrDetails" class="hidden">
+          <summary>OCR text & detected rows</summary>
+          <pre id="ocrText"></pre>
+          <div id="ocrDetected"></div>
+        </details>
+      </div>
+
+      <div class="card">
+        <div class="section-title wrap">
+          <div>
+            <h2>Score Sheet</h2>
+            <p class="muted">Enter marks such as X, 9/, 9-, 72. In the 10th, examples include XXX, X9/, 9/X, 9/9.</p>
+          </div>
+          <button id="clearNightBtn" class="danger ghost">Clear</button>
+        </div>
+        <div id="scoreSheet" class="score-sheet"></div>
+        <div class="savebar">
+          <div id="nightValidation" class="muted"></div>
+          <button id="saveNightBtn" class="primary large">Save 3-Game League Night</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-history" class="view">
+      <div class="card">
+        <div class="section-title wrap">
+          <h2>League Night History</h2>
+          <div class="selector-row compact">
+            <label>Season<select id="historySeasonSelect"></select></label>
+            <label>League<select id="historyLeagueSelect"></select></label>
+            <label>Team<select id="historyTeamSelect"></select></label>
+          </div>
+        </div>
+        <div id="historyList"></div>
+      </div>
+    </section>
+
+    <section id="view-backup" class="view">
+      <div class="grid-2">
+        <div class="card">
+          <h2>Export Backup</h2>
+          <p class="muted">Download all seasons, leagues, teams, bowlers, and scores as one JSON backup file.</p>
+          <button id="exportBtn" class="primary">Download Backup</button>
+        </div>
+        <div class="card">
+          <h2>Import Backup</h2>
+          <p class="muted">Restore a backup on another phone or computer.</p>
+          <input id="importFile" type="file" accept="application/json,.json" />
+          <button id="importBtn">Import Backup</button>
+        </div>
+      </div>
+      <div class="card notice">
+        <strong>Storage:</strong> This version saves data in this browser using local storage. GitHub Pages can host the app itself. Export a backup periodically until cloud syncing is added.
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
