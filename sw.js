@@ -1,5 +1,5 @@
-const CACHE='bowling-tracker-v16-chart';
-const CORE=['./','./index.html','./ball-pin.svg?v=20261002-icon1','./styles.css?v=20261002-chart1','./app.js?v=20261002-chart1','./cloud-sync.js?v=20261002-cloud1','./manifest.webmanifest','./vendor/jspdf.umd.min.js'];
+const CACHE='bowling-tracker-v17-bests';
+const CORE=['./','./index.html','./ball-pin.svg?v=20261002-icon1','./styles.css?v=20261002-bests1','./app.js?v=20261002-bests1','./cloud-sync.js?v=20261002-cloud1','./manifest.webmanifest','./vendor/jspdf.umd.min.js'];
 self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE)))});
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('bowling-tracker-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',e=>{
