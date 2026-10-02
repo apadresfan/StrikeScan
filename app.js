@@ -84,6 +84,8 @@ function renderDashboard(){
  $('#dashboardBowlerSelect').disabled=!bowlers.length;
  $('#dashTitle').textContent=bowler?bowler.name+' — '+t.name:t?t.name+' — '+l.name:'No team selected';
  $('#dashSubtitle').textContent=s?s.name+' season'+(bowler?' · '+l.name:'')+' · '+(bowler?'Individual bowler statistics':'All team bowlers'):'Create a season, league, and team to get started.';
+ $('#downloadBowlerPdfBtn').disabled=!bowler||!statsForTeam(t,id).games;
+ $('#shareBowlerPdfBtn').disabled=$('#downloadBowlerPdfBtn').disabled;
  const st=statsForTeam(t,id),decimal=value=>value===null?'—':value.toFixed(1);
  const cards=items=>items.map(([label,value])=>'<div class="stat"><div class="value">'+value+'</div><div class="label">'+label+'</div></div>').join('');
  $('#statCards').innerHTML=cards([['Games',st.games],['Average',decimal(st.avg)],['High Game',st.high??'—'],['High Series',st.highSeries??'—']]);
@@ -387,6 +389,103 @@ function applyOcr(){
  for(const row of ocrResult.rows){if(!row.bowlerId||bowlingScore(row.frames)===null)continue;const b=game.bowlers.find(b=>b.bowlerId===row.bowlerId);if(b){b.frames=[...row.frames];filled+=10;}}
  renderScoreSheet();toast('Applied '+filled+' frame marks to Game '+game.game+'. Verify before saving.');
 }
+function bowlerPdfData(){
+ const team=currentTeam(),id=state.selected.bowlerId,bowler=dashboardBowlers(team).find(b=>b.id===id);
+ if(!bowler)throw new Error('Choose an individual bowler on the dashboard first.');
+ const stats=statsForTeam(team,id);
+ if(!stats.games)throw new Error('Save a league night for this bowler before exporting.');
+ return {bowler:bowler.name,season:currentSeason().name,league:currentLeague().name,team:team.name,stats,generated:new Date()};
+}
+function createBowlerPdf(model,PdfClass=window.jspdf.jsPDF){
+ const doc=new PdfClass({unit:'pt',format:'letter',compress:true});
+ const M=42,W=528,BOTTOM=742;let y=42;
+ const clean=value=>String(value??'-').replace(/[\u2010-\u2015]/g,'-').replace(/\u00b7/g,'/').replace(/[\u2018\u2019]/g,"'").replace(/[\u201c\u201d]/g,'"');
+ const number=value=>value===null?'-':Number(value).toFixed(1);
+ const date=value=>new Date(value+'T12:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
+ const label=(text,size=10,bold=false,color=[28,39,61])=>{doc.setFont('helvetica',bold?'bold':'normal');doc.setFontSize(size);doc.setTextColor(...color);};
+ function paragraph(text,size=10,bold=false){
+  label(text,size,bold);const lines=doc.splitTextToSize(clean(text),W);
+  for(const line of lines){room(size+5);doc.text(line,M,y);y+=size+5;}
+ }
+ function newPage(){doc.addPage();y=38;label('',10,true);doc.text(clean(model.bowler)+' - Bowling Report',M,y);y+=14;doc.setDrawColor(218,224,232);doc.line(M,y,M+W,y);y+=22;}
+ function room(height){if(y+height>BOTTOM)newPage();}
+ function section(title,height=35){room(height+10);y+=18;label('',12,true);doc.text(title,M,y);y+=17;}
+ function tableHead(headers,widths){
+  room(24);let x=M;doc.setFillColor(28,39,61);doc.rect(M,y,W,24,'F');label('',9,true,[255,255,255]);
+  headers.forEach((header,i)=>{doc.text(header,x+widths[i]/2,y+16,{align:'center'});x+=widths[i];});y+=24;
+ }
+ function tableRow(cells,widths,height=23){
+  room(height);let x=M;doc.setDrawColor(219,225,233);label('',9,false);
+  cells.forEach((cell,i)=>{doc.rect(x,y,widths[i],height);doc.text(clean(cell),x+widths[i]/2,y+15,{align:'center'});x+=widths[i];});y+=height;
+ }
+ label('',10,true,[182,42,109]);doc.text('STRIKESCAN / BOWLER REPORT',M,y);y+=26;
+ paragraph(model.bowler,22,true);y+=3;
+ paragraph('Season: '+model.season+'   |   League: '+model.league);
+ paragraph('Team: '+model.team);
+ const nights=[...model.stats.nights].sort((a,b)=>a.date.localeCompare(b.date)),st=model.stats;
+ paragraph('Saved games: '+date(nights[0].date)+' to '+date(nights.at(-1).date),9);
+ y+=8;
+ const metrics=[['Games',st.games],['Game Average',number(st.avg)],['High Game',st.high],['High Series',st.highSeries??'-'],
+ ['Average Series',number(st.avgSeries)],['Strikes',st.strikes],['Spares',st.spares],['Open Frames',st.opens]];
+ room(105);
+ metrics.forEach(([name,value],i)=>{
+  const x=M+(i%4)*132,top=y+Math.floor(i/4)*51;
+  doc.setFillColor(246,248,251);doc.setDrawColor(219,225,233);doc.roundedRect(x+2,top,128,45,5,5,'FD');
+  label('',9,false,[84,96,116]);doc.text(name,x+12,top+15);
+  label('',16,true);doc.text(String(value),x+12,top+34);
+ });y+=109;
+ paragraph(st.gameAverages.map((v,i)=>'Game '+(i+1)+' average: '+number(v)).join('   |   '),9);
+ const strikeRate=st.frames?(100*st.strikes/st.frames).toFixed(1)+'%':'-';
+ const spareRate=st.frames>st.strikes?(100*st.spares/(st.frames-st.strikes)).toFixed(1)+'%':'-';
+ paragraph('Strike rate: '+strikeRate+'   |   Spare conversion: '+spareRate,9);
+ paragraph('Rates count scoring frames; tenth-frame bonus rolls are excluded.',8);
+ section('Game scores & three-game series',60);
+ const summaryWidths=[152,88,88,88,112];
+ tableHead(['Date','Game 1','Game 2','Game 3','Series'],summaryWidths);
+ for(const n of nights){
+  if(y+23>BOTTOM){newPage();tableHead(['Date','Game 1','Game 2','Game 3','Series'],summaryWidths);}
+  const scores=[1,2,3].map(g=>n.entries.find(e=>e.game===g)?.score);
+  tableRow([date(n.date),...scores.map(v=>v??'-'),scores.every(v=>v!==undefined)?scores.reduce((a,b)=>a+b,0):'-'],summaryWidths);
+ }
+ section('Frame-by-frame game details',160);
+ const frameWidths=[38,...Array(10).fill(44),50];
+ for(const n of nights){
+  room(125);y+=6;label('',11,true);doc.text(date(n.date),M,y);y+=13;
+  tableHead(['Game',...Array.from({length:10},(_,i)=>String(i+1)),'Total'],frameWidths);
+  for(const game of [1,2,3]){
+   const entry=n.entries.find(e=>e.game===game);
+   tableRow([game,...Array.from({length:10},(_,i)=>entry?.frames?.[i]||'-'),entry?.score??'-'],frameWidths,23);
+  }y+=12;
+ }
+ const pageCount=doc.getNumberOfPages();
+ for(let p=1;p<=pageCount;p++){
+  doc.setPage(p);doc.setDrawColor(219,225,233);doc.line(M,754,M+W,754);
+  label('',8,false,[100,111,130]);doc.text('StrikeScan / Generated '+model.generated.toLocaleDateString(),M,769);
+  doc.text('Page '+p+' of '+pageCount,M+W,769,{align:'right'});
+ }
+ doc.setProperties({title:clean(model.bowler)+' - Bowling Stats and Games',subject:'Bowler statistics and frame-by-frame league game details',author:'StrikeScan'});
+ return doc;
+}
+function bowlerPdfFilename(model){
+ const safe=value=>String(value).normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9_-]+/g,'-').replace(/^-|-$/g,'').slice(0,60)||'Bowler';
+ return safe(model.bowler)+'-'+safe(model.season)+'-Bowling-Report.pdf';
+}
+function downloadBowlerPdf(){
+ try{
+  if(!window.jspdf?.jsPDF)throw new Error('The PDF component did not load. Reload the page and try again.');
+  const model=bowlerPdfData();createBowlerPdf(model).save(bowlerPdfFilename(model));toast('Bowler PDF downloaded');
+ }catch(e){console.error(e);toast(e.message||'Could not create the PDF');}
+}
+async function shareBowlerPdf(){
+ try{
+  if(!window.jspdf?.jsPDF)throw new Error('The PDF component did not load. Reload the page and try again.');
+  const model=bowlerPdfData(),doc=createBowlerPdf(model),filename=bowlerPdfFilename(model);
+  const file=new File([doc.output('blob')],filename,{type:'application/pdf'});
+  if(navigator.canShare?.({files:[file]})&&navigator.share){await navigator.share({files:[file],title:model.bowler+' bowling report'});}
+  else{doc.save(filename);toast('PDF downloaded - attach it to your message or email.');}
+ }catch(e){if(e.name==='AbortError')return;console.error(e);toast(e.message||'Could not share the PDF. Try Download Bowler PDF.');}
+}
+
 function exportBackup(){const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`bowling-tracker-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(a.href)}
 function importBackup(){const f=$('#importFile').files[0];if(!f)return toast('Choose a backup file');const reader=new FileReader();reader.onload=()=>{try{const data=JSON.parse(reader.result);if(!data.seasons)throw new Error('Invalid');if(confirm('Replace current bowling data with this backup?')){state=data;nightDraft=null;persist();toast('Backup imported')}}catch{toast('That file is not a valid bowling backup')}};reader.readAsText(f)}
 function clearNight(){const t=currentTeam();if(!t)return;if(confirm('Clear the current unsaved score sheet?')){nightDraft={teamId:t.id,games:blankGames(t)};renderScoreSheet()}}
@@ -394,6 +493,8 @@ function renderNightHeader(){const s=currentSeason(),l=currentLeague(),t=current
 function renderAll(){ensureSelection();renderSelectors();renderBowlers();renderDashboard();renderHistory();renderNightHeader();renderScoreSheet()}
 function showView(name){$$('.view').forEach(v=>v.classList.toggle('active',v.id===`view-${name}`));$$('.tab').forEach(t=>t.classList.toggle('active',t.dataset.view===name));window.scrollTo({top:0,behavior:'smooth'})}
 $$('.tab').forEach(b=>b.onclick=()=>showView(b.dataset.view));$$('[data-go]').forEach(b=>b.onclick=()=>showView(b.dataset.go));
+$('#downloadBowlerPdfBtn').onclick=downloadBowlerPdf;
+$('#shareBowlerPdfBtn').onclick=shareBowlerPdf;
 $('#addSeasonBtn').onclick=addSeason;$('#addLeagueBtn').onclick=addLeague;$('#addTeamBtn').onclick=addTeam;$('#addBowlerBtn').onclick=addBowler;$('#saveNightBtn').onclick=saveNight;$('#clearNightBtn').onclick=clearNight;$('#runOcrBtn').onclick=runOcr;$('#applyOcrBtn').onclick=applyOcr;$('#exportBtn').onclick=exportBackup;$('#importBtn').onclick=importBackup;
 $('#scoreboardImage').onchange=()=>{const f=$('#scoreboardImage').files[0];if(!f)return;$('#imagePreview').src=URL.createObjectURL(f);$('#imagePreviewWrap').classList.remove('hidden');ocrResult=null;$('#applyOcrBtn').disabled=true;$('#ocrDetails').classList.add('hidden')};
 $('#ocrBrightness').oninput=refreshPhotoAdjustments;
