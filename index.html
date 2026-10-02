@@ -35,10 +35,20 @@
         </div>
         <button class="primary" data-go="night">Start League Night</button>
       </div>
+      <div class="card">
+        <div class="selector-row">
+          <label>Season<select id="dashSeasonSelect"></select></label>
+          <label>League<select id="dashLeagueSelect"></select></label>
+          <label>Team<select id="dashTeamSelect"></select></label>
+        </div>
+        <label>Bowler statistics<select id="dashboardBowlerSelect"></select></label>
+      </div>
       <div id="statCards" class="stat-grid"></div>
+      <div id="bowlerStatCards" class="stat-grid"></div>
+      <p id="gameAverageSummary" class="muted small"></p>
       <div class="grid-2">
         <div class="card">
-          <div class="section-title"><h3>Recent league nights</h3></div>
+          <div class="section-title"><h3 id="recentNightsTitle">Recent league nights</h3></div>
           <div id="recentNights" class="empty">No league nights saved yet.</div>
         </div>
         <div class="card">
@@ -187,6 +197,6 @@
   <div id="toast" class="toast" role="status"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-  <script src="app.js?v=20261002-ocr7"></script>
+  <script src="app.js?v=20261002-stats1"></script>
 </body>
 </html>
