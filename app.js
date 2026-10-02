@@ -53,7 +53,7 @@ function renderScoreSheet(){ensureDraft();const el=$('#scoreSheet');const t=curr
   $$('.frame-input').forEach(inp=>{inp.addEventListener('input',e=>{const g=nightDraft.games.find(x=>x.game===+inp.dataset.game);const b=g.bowlers.find(x=>x.bowlerId===inp.dataset.bowler);b.frames[+inp.dataset.frame]=normalizeFrame(inp.value);inp.value=b.frames[+inp.dataset.frame];updateTotals()});inp.addEventListener('focus',()=>inp.select())});updateTotals()}
 function updateTotals(){if(!nightDraft)return;let valid=0,total=0;for(const g of nightDraft.games){for(const b of g.bowlers){total++;const s=bowlingScore(b.frames);const el=document.querySelector(`[data-total="${g.game}:${b.bowlerId}"]`);if(el){el.textContent=s??'—';el.classList.toggle('valid',s!=null);el.classList.toggle('invalid',s==null&&b.frames.some(Boolean))}if(s!=null)valid++}}$('#nightValidation').textContent=`${valid} of ${total} bowler games complete and valid.`}
 function saveNight(){const t=currentTeam();if(!t||!nightDraft)return toast('Select a team');const entries=[];for(const g of nightDraft.games){for(const b of g.bowlers){const score=bowlingScore(b.frames);if(score==null)return toast(`Finish or correct Game ${g.game} for ${b.name}`);entries.push({game:g.game,bowlerId:b.bowlerId,name:b.name,frames:[...b.frames],score})}}
-  t.nights.push({id:uid(),date:$('#nightDate').value||new Date().toISOString().slice(0,10),createdAt:new Date().toISOString(),entries});t.nights.sort((a,b)=>a.date.localeCompare(b.date));nightDraft={teamId:t.id,games:blankGames(t)};persist();toast('League night saved')}
+  t.nights.push({id:uid(),date:$('#nightDate').value||new Date().toISOString().slice(0,10),createdAt:new Date().toISOString(),entries});t.nights.sort((a,b)=>a.date.localeCompare(b.date));nightDraft={teamId:t.id,games:blankGames(t)};persist();toast(bestNightNotice(t,t.nights.find(n=>n.entries===entries))||'League night saved')}
 function dashboardBowlers(t){
  const byId=new Map((t?.bowlers||[]).map(b=>[b.id,{id:b.id,name:b.name}]));
  for(const n of t?.nights||[])for(const e of n.entries)if(!byId.has(e.bowlerId))byId.set(e.bowlerId,{id:e.bowlerId,name:e.name});
@@ -94,6 +94,39 @@ function renderBowlerProgress(){
  root.querySelectorAll('[data-progress-game]').forEach(el=>{el.onclick=()=>select(+el.dataset.progressGame);el.onfocus=()=>select(+el.dataset.progressGame);el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();select(+el.dataset.progressGame)}}});select(games.length-1);
 }
 
+function personalBestData(team,bowlerId){
+ const nights=[...(team?.nights||[])].sort((a,b)=>a.date.localeCompare(b.date)||String(a.createdAt||'').localeCompare(String(b.createdAt||'')));
+ let highGame=null,highSeries=null;const achievements=new Map();
+ for(const night of nights){
+  const entries=night.entries.filter(e=>e.bowlerId===bowlerId).sort((a,b)=>a.game-b.game),marks=[];
+  for(const e of entries)if(Number.isFinite(e.score)&&(!highGame||e.score>highGame.score)){
+   marks.push({kind:'game',score:e.score,game:e.game,first:!highGame});highGame={score:e.score,date:night.date,game:e.game};
+  }
+  if(entries.length===3&&new Set(entries.map(e=>e.game)).size===3&&entries.every(e=>[1,2,3].includes(e.game)&&Number.isFinite(e.score))){
+   const score=entries.reduce((sum,e)=>sum+e.score,0);
+   if(!highSeries||score>highSeries.score){marks.push({kind:'series',score,first:!highSeries});highSeries={score,date:night.date}}
+  }
+  achievements.set(night.id,marks);
+ }
+ return {highGame,highSeries,achievements};
+}
+function renderPersonalBests(){
+ const root=$('#personalBests'),team=currentTeam(),bowler=dashboardBowlers(team).find(b=>b.id===state.selected.bowlerId);
+ if(!bowler){root.innerHTML='<div class="empty">Choose a bowler above to see their personal bests.</div>';return}
+ const records=personalBestData(team,bowler.id);
+ root.innerHTML='<p class="muted small">'+esc(bowler.name)+' · Selected season, league and team</p><div class="best-grid">'+[['High game',records.highGame],['High series',records.highSeries]].map(([label,record])=>'<div class="best-trophy"><span class="best-label">🏆 '+label+'</span><strong>'+ (record?.score??'—')+'</strong><span>'+(record?esc(formatDate(record.date))+(record.game?' · Game '+record.game:' · 3 games'):'No '+(label==='High game'?'saved games':'complete three-game series')+' yet')+'</span></div>').join('')+'</div><p class="muted small">New records are highlighted in History. Ties keep the original record date.</p>';
+}
+function bestNightNotice(team,night){
+ const previous={...team,nights:team.nights.filter(n=>n.id!==night.id)},notices=[];
+ for(const id of new Set(night.entries.map(e=>e.bowlerId))){
+  const entries=night.entries.filter(e=>e.bowlerId===id),prior=personalBestData(previous,id),name=entries[0].name;
+  const high=Math.max(...entries.map(e=>e.score));
+  if(prior.highGame&&high>prior.highGame.score)notices.push(name+': new high game '+high);
+  if(entries.length===3&&new Set(entries.map(e=>e.game)).size===3&&entries.every(e=>[1,2,3].includes(e.game))){const sum=entries.reduce((a,e)=>a+e.score,0);if(prior.highSeries&&sum>prior.highSeries.score)notices.push(name+': new high series '+sum)}
+ }
+ return notices.length?'🏆 '+notices.join(' · '):null;
+}
+
 function renderDashboard(){
  const s=currentSeason(),l=currentLeague(),t=currentTeam(),bowlers=dashboardBowlers(t);
  if(!bowlers.some(b=>b.id===state.selected.bowlerId))state.selected.bowlerId=null;
@@ -109,6 +142,7 @@ function renderDashboard(){
  $('#statCards').innerHTML=cards([['Games',st.games],['Average',decimal(st.avg)],['High Game',st.high??'—'],['High Series',st.highSeries??'—']]);
  $('#bowlerStatCards').innerHTML=cards([['Average Series',decimal(st.avgSeries)],['Strikes',st.strikes],['Spares',st.spares],['Open Frames',st.opens]]);
  $('#gameAverageSummary').textContent=st.games?st.gameAverages.map((avg,i)=>'Game '+(i+1)+' average: '+decimal(avg)).join(' · ')+(st.frames?' · Strike rate: '+(100*st.strikes/st.frames).toFixed(1)+'% · Spare conversion: '+(st.frames>st.strikes?(100*st.spares/(st.frames-st.strikes)).toFixed(1)+'%':'—'):''):'Save a league night to see statistics.';
+ renderPersonalBests();
  renderBowlerProgress();
  $('#recentNightsTitle').textContent=bowler?'Games & series history':'Recent league nights';
  const nights=[...st.nights].sort((a,b)=>b.date.localeCompare(a.date));
@@ -169,7 +203,7 @@ function saveScoreChanges(){
 }
 
 function isValidNightDate(value){if(!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;const date=new Date(value+'T12:00:00Z');return Number.isFinite(date.getTime())&&date.toISOString().slice(0,10)===value}
-function renderHistory(){const t=currentTeam();const el=$('#historyList');if(!t||!t.nights.length){el.innerHTML='<div class="empty">No saved league nights for this team.</div>';return}el.innerHTML=[...t.nights].sort((a,b)=>b.date.localeCompare(a.date)).map(n=>{const ids=[...new Set(n.entries.map(e=>e.bowlerId))];const rows=ids.map(id=>{const es=n.entries.filter(e=>e.bowlerId===id).sort((a,b)=>a.game-b.game);const sum=es.reduce((a,b)=>a+b.score,0);return `<div>${esc(es[0]?.name||'')}</div>${[1,2,3].map(g=>`<div>${es.find(e=>e.game===g)?.score??'—'}</div>`).join('')}<div><strong>${sum}</strong></div>`}).join('');return `<div class="history-night"><div class="history-head wrap"><strong>${formatDate(n.date)}</strong><div class="row wrap"><button class="ghost icon-btn" data-edit-scores="${esc(n.id)}">Edit Scores</button><button class="ghost icon-btn" data-edit-night="${esc(n.id)}" aria-expanded="false" aria-controls="date-editor-${esc(n.id)}">Edit Date</button><button class="ghost danger icon-btn" data-delete-night="${n.id}">Delete</button></div></div><form id="date-editor-${esc(n.id)}" class="hidden" data-date-editor="${esc(n.id)}" style="padding:.8rem"><label for="saved-date-${esc(n.id)}">League night date<input id="saved-date-${esc(n.id)}" type="date" value="${esc(n.date)}" required></label><div class="row wrap"><button class="primary" type="submit">Save Date</button><button class="ghost" type="button" data-cancel-date="${esc(n.id)}">Cancel</button></div></form><div class="history-grid"><div>Bowler</div><div>G1</div><div>G2</div><div>G3</div><div>Series</div>${rows}</div></div>`}).join('');$$('[data-edit-scores]').forEach(btn=>btn.onclick=()=>openSavedScoreEditor(btn.dataset.editScores));$$('[data-edit-night]').forEach(btn=>btn.onclick=()=>{const form=document.getElementById('date-editor-'+btn.dataset.editNight);const opening=form.classList.contains('hidden');form.classList.toggle('hidden',!opening);btn.setAttribute('aria-expanded',String(opening));if(opening)form.querySelector('input').focus()});
+function renderHistory(){const t=currentTeam();const el=$('#historyList');if(!t||!t.nights.length){el.innerHTML='<div class="empty">No saved league nights for this team.</div>';return}el.innerHTML=[...t.nights].sort((a,b)=>b.date.localeCompare(a.date)).map(n=>{const ids=[...new Set(n.entries.map(e=>e.bowlerId))];const rows=ids.map(id=>{const es=n.entries.filter(e=>e.bowlerId===id).sort((a,b)=>a.game-b.game);const sum=es.reduce((a,b)=>a+b.score,0);const marks=personalBestData(t,id).achievements.get(n.id)||[];return `<div>${esc(es[0]?.name||'')}${marks.map(m=>`<span class="best-badge">🏆 ${m.first?(m.kind==='game'?'First high game':'First high series'):m.kind==='game'?'New high game':'New high series'}: ${m.score}${m.game?' · G'+m.game:''}</span>`).join('')}</div>${[1,2,3].map(g=>`<div>${es.find(e=>e.game===g)?.score??'—'}</div>`).join('')}<div><strong>${sum}</strong></div>`}).join('');return `<div class="history-night"><div class="history-head wrap"><strong>${formatDate(n.date)}</strong><div class="row wrap"><button class="ghost icon-btn" data-edit-scores="${esc(n.id)}">Edit Scores</button><button class="ghost icon-btn" data-edit-night="${esc(n.id)}" aria-expanded="false" aria-controls="date-editor-${esc(n.id)}">Edit Date</button><button class="ghost danger icon-btn" data-delete-night="${n.id}">Delete</button></div></div><form id="date-editor-${esc(n.id)}" class="hidden" data-date-editor="${esc(n.id)}" style="padding:.8rem"><label for="saved-date-${esc(n.id)}">League night date<input id="saved-date-${esc(n.id)}" type="date" value="${esc(n.date)}" required></label><div class="row wrap"><button class="primary" type="submit">Save Date</button><button class="ghost" type="button" data-cancel-date="${esc(n.id)}">Cancel</button></div></form><div class="history-grid"><div>Bowler</div><div>G1</div><div>G2</div><div>G3</div><div>Series</div>${rows}</div></div>`}).join('');$$('[data-edit-scores]').forEach(btn=>btn.onclick=()=>openSavedScoreEditor(btn.dataset.editScores));$$('[data-edit-night]').forEach(btn=>btn.onclick=()=>{const form=document.getElementById('date-editor-'+btn.dataset.editNight);const opening=form.classList.contains('hidden');form.classList.toggle('hidden',!opening);btn.setAttribute('aria-expanded',String(opening));if(opening)form.querySelector('input').focus()});
 $$('[data-cancel-date]').forEach(btn=>btn.onclick=()=>{const form=btn.closest('form');form.classList.add('hidden');const edit=$$('[data-edit-night]').find(b=>b.dataset.editNight===btn.dataset.cancelDate);edit.setAttribute('aria-expanded','false');form.querySelector('input').value=t.nights.find(n=>n.id===btn.dataset.cancelDate).date;edit.focus()});
 $$('[data-date-editor]').forEach(form=>form.onsubmit=e=>{e.preventDefault();const value=form.querySelector('input').value;if(!isValidNightDate(value))return toast('Choose a valid league night date');const night=t.nights.find(n=>n.id===form.dataset.dateEditor);if(!night)return;night.date=value;t.nights.sort((a,b)=>a.date.localeCompare(b.date));persist();toast('League night date updated')});
 $$('[data-delete-night]').forEach(btn=>btn.onclick=()=>{if(confirm('Delete this league night?')){t.nights=t.nights.filter(n=>n.id!==btn.dataset.deleteNight);persist();toast('League night deleted')}})}
