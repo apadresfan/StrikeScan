@@ -56,10 +56,10 @@ function blankGames(team){return [1,2,3].map(game=>({game,bowlers:team.bowlers.m
 let nightDraft=null;
 function ensureDraft(){const t=currentTeam();if(!t){nightDraft=null;return}if(!nightDraft||nightDraft.teamId!==t.id){nightDraft={teamId:t.id,games:blankGames(t)}}else{for(const g of nightDraft.games){g.bowlers=t.bowlers.map(b=>g.bowlers.find(x=>x.bowlerId===b.id)||{bowlerId:b.id,name:b.name,frames:Array(10).fill('')})}}}
 function renderScoreSheet(){ensureDraft();const el=$('#scoreSheet');const t=currentTeam(); if(!t){el.innerHTML='<div class="empty">Select a team first.</div>';return}if(!t.bowlers.length){el.innerHTML='<div class="empty">Add bowlers to this team first.</div>';return}
-  el.innerHTML=nightDraft.games.map(g=>`<div class="game-block"><div class="game-heading"><h3>Game ${g.game}</h3><span class="muted">${g.bowlers.length} bowlers</span></div><table class="score-table"><thead><tr><th>Bowler</th>${Array.from({length:10},(_,i)=>`<th>${i+1}</th>`).join('')}<th>Total</th></tr></thead><tbody>${g.bowlers.map(b=>`<tr><td class="name-cell">${esc(b.name)}<label class="small"><input type="checkbox" data-draft-absent="${g.game}:${b.bowlerId}" ${b.absent?'checked':''}> Absent (ABS)</label></td>${b.frames.map((f,i)=>`<td><input class="frame-input ${i===9?'tenth':''}" data-game="${g.game}" data-bowler="${b.bowlerId}" data-frame="${i}" value="${esc(f)}" ${b.absent?'disabled':''} maxlength="4" inputmode="text" autocomplete="off" spellcheck="false" aria-label="${esc(b.name)}, game ${g.game}, frame ${i+1}"></td>`).join('')}<td class="score-total"><input class="game-total-input" data-total="${g.game}:${b.bowlerId}" type="number" min="0" max="300" step="1" inputmode="numeric" placeholder="Total" aria-label="${esc(b.name)}, game ${g.game}, total score" style="width:80px"><small data-total-note="${g.game}:${b.bowlerId}"></small></td></tr>`).join('')}</tbody></table></div>`).join('');
+  el.innerHTML=nightDraft.games.map(g=>`<div class="game-block"><div class="game-heading"><h3>Game ${g.game}</h3><span class="muted">${g.bowlers.length} bowlers</span></div><table class="score-table"><thead><tr><th>Bowler</th>${Array.from({length:10},(_,i)=>`<th>${i+1}</th>`).join('')}<th>Total</th></tr></thead><tbody>${g.bowlers.map(b=>`<tr><td class="name-cell">${esc(b.name)}<label class="small"><input type="checkbox" data-draft-absent="${g.game}:${b.bowlerId}" ${b.absent?'checked':''}> Absent (ABS)</label></td>${b.frames.map((f,i)=>`<td><input class="frame-input ${i===9?'tenth':''} ${b.ocrUncertain?.[i]?'ocr-uncertain':''}" title="${b.ocrUncertain?.[i]?'OCR uncertain — check this frame':''}" data-game="${g.game}" data-bowler="${b.bowlerId}" data-frame="${i}" value="${esc(f)}" ${b.absent?'disabled':''} maxlength="4" inputmode="text" autocomplete="off" spellcheck="false" aria-label="${esc(b.name)}, game ${g.game}, frame ${i+1}"></td>`).join('')}<td class="score-total"><input class="game-total-input" data-total="${g.game}:${b.bowlerId}" type="number" min="0" max="300" step="1" inputmode="numeric" placeholder="Total" aria-label="${esc(b.name)}, game ${g.game}, total score" style="width:80px"><small data-total-note="${g.game}:${b.bowlerId}"></small></td></tr>`).join('')}</tbody></table></div>`).join('');
   $$('[data-total]').forEach(input=>input.oninput=()=>{const [game,id]=input.dataset.total.split(':');const b=nightDraft.games.find(g=>g.game===+game).bowlers.find(b=>b.bowlerId===id);b.manualTotal=input.value;b.totalOnly=input.value!=='';updateTotals()});
   $$('[data-draft-absent]').forEach(el=>el.onchange=()=>{const [game,id]=el.dataset.draftAbsent.split(':');nightDraft.games.find(g=>g.game===+game).bowlers.find(b=>b.bowlerId===id).absent=el.checked;renderScoreSheet()});
-  $$('.frame-input').forEach(inp=>{inp.addEventListener('input',e=>{const g=nightDraft.games.find(x=>x.game===+inp.dataset.game);const b=g.bowlers.find(x=>x.bowlerId===inp.dataset.bowler);b.totalOnly=false;delete b.manualTotal;b.frames[+inp.dataset.frame]=normalizeFrame(inp.value);inp.value=b.frames[+inp.dataset.frame];updateTotals()});inp.addEventListener('focus',()=>inp.select())});updateTotals()}
+  $$('.frame-input').forEach(inp=>{inp.addEventListener('input',e=>{const g=nightDraft.games.find(x=>x.game===+inp.dataset.game);const b=g.bowlers.find(x=>x.bowlerId===inp.dataset.bowler);b.totalOnly=false;delete b.manualTotal;b.frames[+inp.dataset.frame]=normalizeFrame(inp.value);inp.value=b.frames[+inp.dataset.frame];if(b.ocrUncertain){b.ocrUncertain[+inp.dataset.frame]=parseFrame(inp.value,+inp.dataset.frame)===null;inp.classList.toggle('ocr-uncertain',b.ocrUncertain[+inp.dataset.frame]);}updateOcrFromScoreSheet(b,g.game,+inp.dataset.frame);updateTotals()});inp.addEventListener('focus',()=>inp.select())});updateTotals()}
 function updateTotals(){if(!nightDraft)return;let valid=0,total=0;for(const g of nightDraft.games)for(const b of g.bowlers){
  total++;const score=entryScore(b),key=g.game+':'+b.bowlerId,input=$('[data-total="'+key+'"]'),note=$('[data-total-note="'+key+'"]');
  if(input){input.disabled=!!b.absent;if(document.activeElement!==input)input.value=b.absent?'':b.totalOnly?(b.manualTotal??b.score??''):(score??'');input.setAttribute('aria-invalid',String(!b.absent&&score===null&&!!b.totalOnly));}
@@ -262,7 +262,7 @@ function refreshPhotoAdjustments(){
  $('#contrastValue').textContent=c.toFixed(2)+'×';
  // CSS brightness is only a preview approximation; OCR uses the numeric pixel adjustment.
  $('#imagePreview').style.filter='contrast('+c+') brightness('+(1+b/128)+')';
- ocrResult=null;$('#applyOcrBtn').disabled=true;$('#ocrDetails').classList.add('hidden');
+ ocrResult=null;$('#ocrDetails').classList.add('hidden');
  $('#ocrStatus').textContent='Photo settings changed. Click Read Scoreboard to retry.';
 }
 
@@ -387,7 +387,7 @@ function readDigitalGrid(data,w,h,adjusted=false){
   if(height<(ys[header+2]-ys[header+1])*.7)break;
   const middle=Math.round((top+bottom)/2),left=Math.round(columns[1]);
   if(![-2,-1,0,1,2].some(dx=>lit(left+dx,middle)))break;
-  const frames=[];
+  const frames=[],uncertainFrames=[];
   for(let f=0;f<10;f++){
    const scale=w/1338,x0=Math.round(frameEdges[f])+Math.max(3,Math.round(5*scale)),x1=Math.round(frameEdges[f+1])-Math.max(3,Math.round(4*scale));
    const y0=Math.round(top)+Math.max(3,Math.round(6*scale)),y1=Math.round(top+height*.43)-Math.max(2,Math.round(3*scale));
@@ -396,7 +396,7 @@ function readDigitalGrid(data,w,h,adjusted=false){
     let n=0;for(let y=y0;y<y1;y++)if(glyphLit(x,y))n++;
     if(n){if(!runs.length||x>runs.at(-1).at(-1)+1)runs.push([x]);else runs.at(-1).push(x);}
    }
-   let marks='',uncertain=false;
+   let marks='',uncertain=false,lowConfidence=false;
    for(const run of runs){
     if(run.length<=8*scale)continue;
     const a=run[0],b=run.at(-1)+1;let c=y1,d=y0;
@@ -412,7 +412,7 @@ function readDigitalGrid(data,w,h,adjusted=false){
      const error=differences/mask.length+Math.min(.4,Math.abs(Math.log(aspect/t.aspect))*.15);
      if(!best||error<best.error)best={char:t.char,error};
     }
-    if(best.error>.28){uncertain=true;break;}marks+=best.char;
+    if(best.error>.28){uncertain=true;break;}if(best.error>.18)lowConfidence=true;marks+=best.char;
    }
    let mark=!uncertain&&parseFrame(marks,f)!==null?marks:'';
    if(pink&&f<9&&!mark){
@@ -421,22 +421,22 @@ function readDigitalGrid(data,w,h,adjusted=false){
     const candidate=first&&second?first+second:'';
     if(candidate&&parseFrame(candidate,f)!==null)mark=candidate;
    }
-   frames.push(mark);
+   frames.push(mark);uncertainFrames.push(!mark||lowConfidence);
   }
-  rows.push({bowlerId:'',name:'Scoreboard row '+(rows.length+1),line:'Assign this row to a bowler; check all frame marks.',frames});
+  rows.push({bowlerId:'',name:'Scoreboard row '+(rows.length+1),line:'Check bowler assignment and highlighted frames on the score sheet.',frames,uncertain:uncertainFrames});
  }
  if(!rows.length)throw new Error('No bowler rows found in this grid.');
  return rows;
 }
 function renderOcrReview(rows,grid){
- rows.forEach(r=>r.frames=Array.from({length:10},(_,i)=>r.frames?.[i]||''));
+ rows.forEach((r,i)=>{r.frames=Array.from({length:10},(_,i)=>r.frames?.[i]||'');r.uncertain=Array.from({length:10},(_,f)=>r.uncertain?.[f]??(!grid||parseFrame(r.frames[f],f)===null));if(grid&&rows.length===currentTeam().bowlers.length&&!r.bowlerId)r.bowlerId=currentTeam().bowlers[i].id;});
  $('#ocrDetected').innerHTML=rows.map((r,i)=>'<div class="game-block"><strong>'+esc(r.name)+'</strong>'+
  '<label>Bowler<select data-ocr-row="'+i+'"><option value="">Choose bowler for this row</option><option value="__skip__">Skip this row</option>'+currentTeam().bowlers.map(b=>'<option value="'+esc(b.id)+'" '+(r.bowlerId===b.id?'selected':'')+'>'+esc(b.name)+'</option>').join('')+'</select></label>'+
  '<label class="small"><input type="checkbox" data-ocr-absent="'+i+'" '+(r.absent?'checked':'')+'> Absent (ABS) — no played score</label><p class="muted small">'+esc(r.line)+'</p><div class="row wrap">'+r.frames.map((f,fi)=>'<label>Frame '+(fi+1)+'<input data-ocr-frame="'+i+':'+fi+'" value="'+esc(f)+'" maxlength="4" aria-label="'+esc(r.name)+', frame '+(fi+1)+'" style="width:65px"></label>').join('')+'<p class="small" data-ocr-feedback="'+i+'" role="status"></p></div>').join('');
- $$('[data-ocr-absent]').forEach(el=>el.onchange=()=>{ocrResult.rows[+el.dataset.ocrAbsent].absent=el.checked;updateOcrApply()});
- $$('[data-ocr-row]').forEach(el=>el.onchange=()=>{ocrResult.rows[+el.dataset.ocrRow].bowlerId=el.value;updateOcrApply()});
- $$('[data-ocr-frame]').forEach(el=>el.oninput=()=>{const [r,f]=el.dataset.ocrFrame.split(':').map(Number);el.value=normalizeFrame(el.value);ocrResult.rows[r].frames[f]=el.value;updateOcrApply()});
- updateOcrApply();
+ $$('[data-ocr-absent]').forEach(el=>el.onchange=()=>{ocrResult.rows[+el.dataset.ocrAbsent].absent=el.checked;updateOcrReview()});
+ $$('[data-ocr-row]').forEach(el=>el.onchange=()=>{ocrResult.rows[+el.dataset.ocrRow].bowlerId=el.value;updateOcrReview()});
+ $$('[data-ocr-frame]').forEach(el=>el.oninput=()=>{const [r,f]=el.dataset.ocrFrame.split(':').map(Number);el.value=normalizeFrame(el.value);ocrResult.rows[r].frames[f]=el.value;updateOcrReview()});
+ updateOcrReview();
 }
 function ocrReviewIssues(){
  const rows=ocrResult?.rows||[],ids=new Set(),issues=[];
@@ -447,14 +447,14 @@ function ocrReviewIssues(){
   ids.add(r.bowlerId);
   if(!r.absent&&bowlingScore(r.frames)===null){const frame=r.frames.findIndex((f,i)=>parseFrame(f,i)===null);issues.push({row:i,frame:frame>=0?frame:0,message:'Correct frame '+(frame>=0?frame+1:1)+' or mark this bowler ABS.'})}
  });
- if(!rows.some(r=>r.bowlerId&&r.bowlerId!=='__skip__'))issues.push({row:0,message:'Choose at least one bowler to apply.'});
+ if(!rows.some(r=>r.bowlerId&&r.bowlerId!=='__skip__'))issues.push({row:0,message:'Choose a bowler to add scores automatically.'});
  return issues;
 }
-function updateOcrApply(){
+function updateOcrReview(){
  const rows=ocrResult?.rows||[],issues=ocrReviewIssues();
  $$('[data-ocr-frame]').forEach(el=>{const row=+el.dataset.ocrFrame.split(':')[0];el.disabled=!!rows[row]?.absent||rows[row]?.bowlerId==='__skip__'});
- rows.forEach((r,i)=>{const el=$('[data-ocr-feedback="'+i+'"]');if(el)el.textContent=r.bowlerId==='__skip__'?'This row will be skipped.':issues.filter(x=>x.row===i).map(x=>x.message).join(' ')||'Ready to apply.'});
- $('#applyOcrBtn').disabled=!rows.length;
+ rows.forEach((r,i)=>{const el=$('[data-ocr-feedback="'+i+'"]');if(el)el.textContent=r.bowlerId==='__skip__'?'This row will be skipped.':issues.filter(x=>x.row===i).map(x=>x.message).join(' ')||'Added to score sheet. Review highlighted frames below.'});
+ syncOcrToScoreSheet();
 }
 async function findDigitalGridAutomatically(file){
  const original=await prepareScoreboard(file,false,true,false);
@@ -484,8 +484,8 @@ async function runOcr(){
  if(!file)return toast('Choose a scoreboard photo first');
  if(!team?.bowlers.length)return toast('Select a team and add its bowlers first');
  if($('#ocrMode').value!=='digital'&&!window.Tesseract){$('#ocrStatus').textContent='The OCR download did not load. Connect to the internet and reload this page.';return;}
- const teamId=team.id,game=+$('#ocrGame').value;let worker;
- ocrResult=null;$('#applyOcrBtn').disabled=true;$('#ocrProgress').classList.remove('hidden');$('#ocrDetails').classList.add('hidden');$('#runOcrBtn').disabled=true;$('#ocrStatus').textContent='Loading the OCR engine…';
+ const teamId=team.id,game=+$('#ocrGame').value;const existing=nightDraft?.games.find(g=>g.game===game);if(existing?.bowlers.some(b=>b.absent||b.totalOnly||b.frames.some(Boolean))&&!confirm('Replace scanned bowlers in Game '+game+' with the new OCR results?'))return;let worker;
+ ocrResult=null;$('#ocrProgress').classList.remove('hidden');$('#ocrDetails').classList.add('hidden');$('#runOcrBtn').disabled=true;$('#ocrStatus').textContent='Loading the OCR engine…';
  try{
   if($('#ocrMode').value==='digital'){
    const found=await findDigitalGridAutomatically(file);
@@ -504,7 +504,7 @@ async function runOcr(){
    $('#ocrText').textContent=ocrResult.text;
    renderOcrReview(rows,true);
    $('#ocrDetails').classList.remove('hidden');$('#ocrDetails').open=true;
-   $('#ocrStatus').textContent='Read '+rows.length+' scoreboard rows. Assign each row to a bowler and correct any blank or incorrect marks before applying Game '+game+'.';
+   $('#ocrStatus').textContent='Read '+rows.length+' rows for Game '+game+'. Assigned rows are added automatically. Check bowler assignments (matching rows use roster order) and review highlighted frames on the score sheet.';
    return;
   }
   worker=await Tesseract.createWorker('eng',1,{logger:m=>{
@@ -527,21 +527,39 @@ async function runOcr(){
   renderOcrReview(rows,false);
   $('#ocrDetails').classList.remove('hidden');$('#ocrDetails').open=true;
   const count=rows.filter(r=>bowlingScore(r.frames)!==null).length;
-  updateOcrApply();
-  $('#ocrStatus').textContent=count?'Read '+count+' bowler rows for Game '+game+'. Review the marks before applying.':'Text was read, but no complete frame rows could be safely identified. Photograph only your team, straight on, with names and all 10 frames visible. Open the OCR text below to see what was read.';
+  updateOcrReview();
+  $('#ocrStatus').textContent=count?'Read '+count+' bowler rows for Game '+game+'. Scores added automatically. Review highlighted frames on the score sheet.':'Text was read, but no complete frame rows could be safely identified. Photograph only your team, straight on, with names and all 10 frames visible. Open the OCR text below to see what was read.';
  }catch(e){console.error(e);$('#ocrStatus').textContent='OCR could not finish: '+(e.message||'Check your internet connection and try a JPG or PNG photo.');}
  finally{if(worker)await worker.terminate().catch(()=>{});$('#runOcrBtn').disabled=false;$('#ocrProgress').classList.add('hidden');}
 }
-function applyOcr(){
- if(!ocrResult||!nightDraft)return;
- const issues=ocrReviewIssues();if(issues.length){updateOcrApply();const issue=issues[0];$('#ocrStatus').textContent='Row '+(issue.row+1)+': '+issue.message;toast(issue.message);const target=issue.frame!==undefined?$('[data-ocr-frame="'+issue.row+':'+issue.frame+'"]'):$('[data-ocr-row="'+issue.row+'"]');target?.focus();return;}
- if(ocrResult.teamId!==currentTeam()?.id)return toast('Read the photo again for this team');
- const game=nightDraft.games.find(g=>g.game===ocrResult.game);
- if(!game)return;
- if(game.bowlers.some(b=>b.absent||b.totalOnly||b.frames.some(Boolean))&&!confirm('Replace detected bowlers’ marks in Game '+game.game+'?'))return;
- let filled=0;
- for(const row of ocrResult.rows){if(!row.bowlerId||row.bowlerId==='__skip__'||(!row.absent&&bowlingScore(row.frames)===null))continue;const b=game.bowlers.find(b=>b.bowlerId===row.bowlerId);if(b){b.totalOnly=false;delete b.manualTotal;b.absent=!!row.absent;b.frames=row.absent?Array(10).fill(''):[...row.frames];filled+=row.absent?0:10;}}
- renderScoreSheet();toast('Applied '+ocrResult.rows.filter(r=>r.bowlerId&&r.bowlerId!=='__skip__'&&r.absent).length+' ABS rows and '+filled+' frame marks to Game '+game.game+'. Verify before saving.');
+function syncOcrToScoreSheet(){
+ if(!ocrResult||ocrResult.teamId!==currentTeam()?.id||!nightDraft)return;
+ const game=nightDraft.games.find(g=>g.game===ocrResult.game);if(!game)return;
+ const counts=new Map();for(const row of ocrResult.rows)if(row.bowlerId&&row.bowlerId!=='__skip__')counts.set(row.bowlerId,(counts.get(row.bowlerId)||0)+1);
+ // Restore the previous target when an OCR row is reassigned or skipped.
+ for(const row of ocrResult.rows)if(row.appliedBowlerId&&(row.appliedBowlerId!==row.bowlerId||counts.get(row.bowlerId)!==1)){
+  const previous=game.bowlers.find(b=>b.bowlerId===row.appliedBowlerId);
+  if(previous&&JSON.stringify(previous)===row.lastApplied){for(const key of Object.keys(previous))delete previous[key];Object.assign(previous,JSON.parse(row.priorDraft));}
+  row.appliedBowlerId=null;
+ }
+ for(const row of ocrResult.rows){
+  if(counts.get(row.bowlerId)!==1)continue;
+  const bowler=game.bowlers.find(b=>b.bowlerId===row.bowlerId);if(!bowler)continue;
+  if(row.appliedBowlerId&&JSON.stringify(bowler)!==row.lastApplied)continue;
+  if(!row.appliedBowlerId)row.priorDraft=JSON.stringify(bowler);
+  bowler.totalOnly=false;delete bowler.manualTotal;bowler.absent=!!row.absent;
+  bowler.frames=row.absent?Array(10).fill(''):[...row.frames];
+  bowler.ocrUncertain=row.absent?Array(10).fill(false):row.frames.map((mark,i)=>!!row.uncertain?.[i]||parseFrame(mark,i)===null);
+  row.appliedBowlerId=row.bowlerId;row.lastApplied=JSON.stringify(bowler);
+ }
+ renderScoreSheet();
+}
+function updateOcrFromScoreSheet(bowler,game,frame){
+ if(!ocrResult||ocrResult.teamId!==currentTeam()?.id||ocrResult.game!==game)return;
+ const row=ocrResult.rows.find(r=>r.appliedBowlerId===bowler.bowlerId);if(!row)return;
+ row.frames[frame]=bowler.frames[frame];row.uncertain[frame]=!!bowler.ocrUncertain?.[frame];
+ const input=$('[data-ocr-frame="'+ocrResult.rows.indexOf(row)+':'+frame+'"]');if(input)input.value=row.frames[frame];
+ row.lastApplied=JSON.stringify(bowler);
 }
 function bowlerPdfData(){
  const team=currentTeam(),id=state.selected.bowlerId,bowler=dashboardBowlers(team).find(b=>b.id===id);
@@ -652,8 +670,8 @@ function showView(name){$$('.view').forEach(v=>v.classList.toggle('active',v.id=
 $$('.tab').forEach(b=>b.onclick=()=>showView(b.dataset.view));$$('[data-go]').forEach(b=>b.onclick=()=>showView(b.dataset.go));
 $('#downloadBowlerPdfBtn').onclick=downloadBowlerPdf;
 $('#shareBowlerPdfBtn').onclick=shareBowlerPdf;
-$('#addSeasonBtn').onclick=addSeason;$('#addLeagueBtn').onclick=addLeague;$('#addTeamBtn').onclick=addTeam;$('#addBowlerBtn').onclick=addBowler;$('#saveNightBtn').onclick=saveNight;$('#clearNightBtn').onclick=clearNight;$('#runOcrBtn').onclick=runOcr;$('#applyOcrBtn').onclick=applyOcr;$('#exportBtn').onclick=exportBackup;$('#importBtn').onclick=importBackup;
-$('#scoreboardImage').onchange=()=>{const f=$('#scoreboardImage').files[0];if(!f)return;$('#imagePreview').src=URL.createObjectURL(f);$('#imagePreviewWrap').classList.remove('hidden');ocrResult=null;$('#applyOcrBtn').disabled=true;$('#ocrDetails').classList.add('hidden')};
+$('#addSeasonBtn').onclick=addSeason;$('#addLeagueBtn').onclick=addLeague;$('#addTeamBtn').onclick=addTeam;$('#addBowlerBtn').onclick=addBowler;$('#saveNightBtn').onclick=saveNight;$('#clearNightBtn').onclick=clearNight;$('#runOcrBtn').onclick=runOcr;$('#exportBtn').onclick=exportBackup;$('#importBtn').onclick=importBackup;
+$('#scoreboardImage').onchange=()=>{const f=$('#scoreboardImage').files[0];if(!f)return;$('#imagePreview').src=URL.createObjectURL(f);$('#imagePreviewWrap').classList.remove('hidden');ocrResult=null;$('#ocrDetails').classList.add('hidden')};
 $('#ocrBrightness').oninput=refreshPhotoAdjustments;
 $('#ocrContrast').oninput=refreshPhotoAdjustments;
 $('#resetPhotoAdjustments').onclick=()=>{$('#ocrBrightness').value='0';$('#ocrContrast').value='1';refreshPhotoAdjustments();};
