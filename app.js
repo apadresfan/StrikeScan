@@ -45,15 +45,28 @@ function parseFrame(frame,index){const s=normalizeFrame(frame);if(index<9){if(s=
   return rolls
 }
 function bowlingScore(frames){if(!frames||frames.length!==10)return null;const all=[],starts=[];for(let i=0;i<10;i++){const r=parseFrame(frames[i],i);if(!r)return null;starts.push(all.length);all.push(...r)}let score=0;for(let i=0;i<9;i++){const r=parseFrame(frames[i],i),start=starts[i];if(r[0]===10){if(all[start+1]==null||all[start+2]==null)return null;score+=10+all[start+1]+all[start+2]}else if(r[0]+r[1]===10){if(all[start+2]==null)return null;score+=10+all[start+2]}else score+=r[0]+r[1]}score+=parseFrame(frames[9],9).reduce((a,b)=>a+b,0);return score}
+function rememberedScore(value){if(value===null||value===undefined||String(value).trim()==='')return null;const n=Number(value);return Number.isInteger(n)&&n>=0&&n<=300?n:null}
+function entryScore(entry){return entry.absent?null:entry.totalOnly?rememberedScore(entry.manualTotal??entry.score):bowlingScore(entry.frames)}
+function savedEntry(entry,game=entry.game){
+ const totalOnly=!entry.absent&&!!entry.totalOnly;
+ return {game,bowlerId:entry.bowlerId,name:entry.name,frames:entry.absent||totalOnly?Array(10).fill(''):[...entry.frames],score:entryScore(entry),...(entry.absent?{absent:true}:{}),...(totalOnly?{totalOnly:true}:{})};
+}
+
 function blankGames(team){return [1,2,3].map(game=>({game,bowlers:team.bowlers.map(b=>({bowlerId:b.id,name:b.name,frames:Array(10).fill('')}))}))}
 let nightDraft=null;
 function ensureDraft(){const t=currentTeam();if(!t){nightDraft=null;return}if(!nightDraft||nightDraft.teamId!==t.id){nightDraft={teamId:t.id,games:blankGames(t)}}else{for(const g of nightDraft.games){g.bowlers=t.bowlers.map(b=>g.bowlers.find(x=>x.bowlerId===b.id)||{bowlerId:b.id,name:b.name,frames:Array(10).fill('')})}}}
 function renderScoreSheet(){ensureDraft();const el=$('#scoreSheet');const t=currentTeam(); if(!t){el.innerHTML='<div class="empty">Select a team first.</div>';return}if(!t.bowlers.length){el.innerHTML='<div class="empty">Add bowlers to this team first.</div>';return}
-  el.innerHTML=nightDraft.games.map(g=>`<div class="game-block"><div class="game-heading"><h3>Game ${g.game}</h3><span class="muted">${g.bowlers.length} bowlers</span></div><table class="score-table"><thead><tr><th>Bowler</th>${Array.from({length:10},(_,i)=>`<th>${i+1}</th>`).join('')}<th>Total</th></tr></thead><tbody>${g.bowlers.map(b=>`<tr><td class="name-cell">${esc(b.name)}<label class="small"><input type="checkbox" data-draft-absent="${g.game}:${b.bowlerId}" ${b.absent?'checked':''}> Absent (ABS)</label></td>${b.frames.map((f,i)=>`<td><input class="frame-input ${i===9?'tenth':''}" data-game="${g.game}" data-bowler="${b.bowlerId}" data-frame="${i}" value="${esc(f)}" ${b.absent?'disabled':''} maxlength="4" inputmode="text" autocomplete="off" spellcheck="false" aria-label="${esc(b.name)}, game ${g.game}, frame ${i+1}"></td>`).join('')}<td class="score-total" data-total="${g.game}:${b.bowlerId}">—</td></tr>`).join('')}</tbody></table></div>`).join('');
+  el.innerHTML=nightDraft.games.map(g=>`<div class="game-block"><div class="game-heading"><h3>Game ${g.game}</h3><span class="muted">${g.bowlers.length} bowlers</span></div><table class="score-table"><thead><tr><th>Bowler</th>${Array.from({length:10},(_,i)=>`<th>${i+1}</th>`).join('')}<th>Total</th></tr></thead><tbody>${g.bowlers.map(b=>`<tr><td class="name-cell">${esc(b.name)}<label class="small"><input type="checkbox" data-draft-absent="${g.game}:${b.bowlerId}" ${b.absent?'checked':''}> Absent (ABS)</label></td>${b.frames.map((f,i)=>`<td><input class="frame-input ${i===9?'tenth':''}" data-game="${g.game}" data-bowler="${b.bowlerId}" data-frame="${i}" value="${esc(f)}" ${b.absent?'disabled':''} maxlength="4" inputmode="text" autocomplete="off" spellcheck="false" aria-label="${esc(b.name)}, game ${g.game}, frame ${i+1}"></td>`).join('')}<td class="score-total"><input class="game-total-input" data-total="${g.game}:${b.bowlerId}" type="number" min="0" max="300" step="1" inputmode="numeric" placeholder="Total" aria-label="${esc(b.name)}, game ${g.game}, total score" style="width:80px"><small data-total-note="${g.game}:${b.bowlerId}"></small></td></tr>`).join('')}</tbody></table></div>`).join('');
+  $$('[data-total]').forEach(input=>input.oninput=()=>{const [game,id]=input.dataset.total.split(':');const b=nightDraft.games.find(g=>g.game===+game).bowlers.find(b=>b.bowlerId===id);b.manualTotal=input.value;b.totalOnly=input.value!=='';updateTotals()});
   $$('[data-draft-absent]').forEach(el=>el.onchange=()=>{const [game,id]=el.dataset.draftAbsent.split(':');nightDraft.games.find(g=>g.game===+game).bowlers.find(b=>b.bowlerId===id).absent=el.checked;renderScoreSheet()});
-  $$('.frame-input').forEach(inp=>{inp.addEventListener('input',e=>{const g=nightDraft.games.find(x=>x.game===+inp.dataset.game);const b=g.bowlers.find(x=>x.bowlerId===inp.dataset.bowler);b.frames[+inp.dataset.frame]=normalizeFrame(inp.value);inp.value=b.frames[+inp.dataset.frame];updateTotals()});inp.addEventListener('focus',()=>inp.select())});updateTotals()}
-function updateTotals(){if(!nightDraft)return;let valid=0,total=0;for(const g of nightDraft.games){for(const b of g.bowlers){total++;const s=bowlingScore(b.frames);const el=document.querySelector(`[data-total="${g.game}:${b.bowlerId}"]`);if(el){el.textContent=b.absent?'ABS':s??'—';el.classList.toggle('valid',s!=null);el.classList.toggle('invalid',!b.absent&&s==null&&b.frames.some(Boolean))}if(b.absent||s!=null)valid++}}$('#nightValidation').textContent=`${valid} of ${total} bowler games complete or marked ABS.`}
-function saveNight(){const t=currentTeam();if(!t||!nightDraft)return toast('Select a team');const entries=[];for(const g of nightDraft.games){for(const b of g.bowlers){const score=bowlingScore(b.frames);if(!b.absent&&score==null)return toast(`Finish or correct Game ${g.game} for ${b.name}`);entries.push({game:g.game,bowlerId:b.bowlerId,name:b.name,frames:b.absent?Array(10).fill(''):[...b.frames],score:b.absent?null:score,...(b.absent?{absent:true}:{})})}}
+  $$('.frame-input').forEach(inp=>{inp.addEventListener('input',e=>{const g=nightDraft.games.find(x=>x.game===+inp.dataset.game);const b=g.bowlers.find(x=>x.bowlerId===inp.dataset.bowler);b.totalOnly=false;delete b.manualTotal;b.frames[+inp.dataset.frame]=normalizeFrame(inp.value);inp.value=b.frames[+inp.dataset.frame];updateTotals()});inp.addEventListener('focus',()=>inp.select())});updateTotals()}
+function updateTotals(){if(!nightDraft)return;let valid=0,total=0;for(const g of nightDraft.games)for(const b of g.bowlers){
+ total++;const score=entryScore(b),key=g.game+':'+b.bowlerId,input=$('[data-total="'+key+'"]'),note=$('[data-total-note="'+key+'"]');
+ if(input){input.disabled=!!b.absent;if(document.activeElement!==input)input.value=b.absent?'':b.totalOnly?(b.manualTotal??b.score??''):(score??'');input.setAttribute('aria-invalid',String(!b.absent&&score===null&&!!b.totalOnly));}
+ if(note)note.textContent=b.absent?'ABS':b.totalOnly?(score===null?'Enter 0–300':'Total only'):'From frames, or enter a total';
+ if(b.absent||score!==null)valid++;
+ }$('#nightValidation').textContent=valid+' of '+total+' games complete, total only, or ABS. Total-only games exclude frame statistics.'}
+function saveNight(){const t=currentTeam();if(!t||!nightDraft)return toast('Select a team');const entries=[];for(const g of nightDraft.games){for(const b of g.bowlers){const score=entryScore(b);if(!b.absent&&score==null)return toast(`Finish or correct Game ${g.game} for ${b.name}`);entries.push(savedEntry(b,g.game))}}
   t.nights.push({id:uid(),date:$('#nightDate').value||new Date().toISOString().slice(0,10),createdAt:new Date().toISOString(),entries});t.nights.sort((a,b)=>a.date.localeCompare(b.date));nightDraft={teamId:t.id,games:blankGames(t)};persist();toast(bestNightNotice(t,t.nights.find(n=>n.entries===entries))||'League night saved')}
 function dashboardBowlers(t){
  const byId=new Map((t?.bowlers||[]).map(b=>[b.id,{id:b.id,name:b.name}]));
@@ -69,7 +82,7 @@ function statsForTeam(t,bowlerId=null){
   for(const e of n.entries.filter(e=>!e.absent&&Number.isFinite(e.score))){if(!by.has(e.bowlerId))by.set(e.bowlerId,[]);by.get(e.bowlerId).push(e);}
   for(const games of by.values())if(games.length===3&&new Set(games.map(e=>e.game)).size===3)series.push(games.reduce((a,e)=>a+e.score,0));
  }
- for(const e of entries)for(let i=0;i<10;i++){
+ for(const e of entries.filter(e=>!e.totalOnly))for(let i=0;i<10;i++){
   const rolls=parseFrame(e.frames?.[i],i);if(!rolls)continue;
   frames++;if(rolls[0]===10)strikes++;else if(rolls[0]+rolls[1]===10)spares++;else opens++;
  }
@@ -173,20 +186,22 @@ function openSavedScoreEditor(nightId){
  $('#savedScoreBody').innerHTML=[...new Set(savedScoreEdit.entries.map(e=>e.game))].sort((a,b)=>a-b).map(game=>'<section class="saved-game"><h3>Game '+game+'</h3>'+savedScoreEdit.entries.map((entry,index)=>{
   if(entry.game!==game)return '';
   entry.frames=Array.from({length:10},(_,frame)=>String(entry.frames?.[frame]||''));
-  return '<div class="saved-bowler"><label class="small"><input type="checkbox" data-saved-absent="'+index+'" '+(entry.absent?'checked':'')+'> Absent (ABS)</label><div class="saved-bowler-heading"><strong>'+esc(entry.name)+'</strong><span data-saved-total="'+index+'"></span></div><div class="saved-frames">'+entry.frames.map((mark,frame)=>'<label><span>'+ (frame+1)+'</span><input class="saved-frame-input" data-saved-entry="'+index+'" data-saved-frame="'+frame+'" value="'+esc(mark)+'" maxlength="4" autocomplete="off" spellcheck="false" aria-label="'+esc(entry.name)+', game '+game+', frame '+(frame+1)+'"></label>').join('')+'</div><p class="muted small" data-saved-error="'+index+'"></p></div>';
+  return '<div class="saved-bowler"><label class="small"><input type="checkbox" data-saved-absent="'+index+'" '+(entry.absent?'checked':'')+'> Absent (ABS)</label><div class="saved-bowler-heading"><strong>'+esc(entry.name)+'</strong><span data-saved-total="'+index+'"></span></div><label>Total score<input data-saved-manual="'+index+'" type="number" min="0" max="300" step="1" inputmode="numeric" value="'+(entry.totalOnly?entry.score:'')+'" placeholder="Enter total without frames"></label><div class="saved-frames">'+entry.frames.map((mark,frame)=>'<label><span>'+ (frame+1)+'</span><input class="saved-frame-input" data-saved-entry="'+index+'" data-saved-frame="'+frame+'" value="'+esc(mark)+'" maxlength="4" autocomplete="off" spellcheck="false" aria-label="'+esc(entry.name)+', game '+game+', frame '+(frame+1)+'"></label>').join('')+'</div><p class="muted small" data-saved-error="'+index+'"></p></div>';
  }).join('')+'</section>').join('');
+ $$('[data-saved-manual]').forEach(input=>input.oninput=()=>{const entry=savedScoreEdit.entries[+input.dataset.savedManual];entry.manualTotal=input.value;entry.totalOnly=input.value!=='';updateSavedScoreTotals()});
  $$('[data-saved-absent]').forEach(el=>el.onchange=()=>{savedScoreEdit.entries[+el.dataset.savedAbsent].absent=el.checked;updateSavedScoreTotals()});
- $$('[data-saved-entry]').forEach(input=>input.oninput=()=>{const entry=savedScoreEdit.entries[+input.dataset.savedEntry];input.value=normalizeFrame(input.value);entry.frames[+input.dataset.savedFrame]=input.value;updateSavedScoreTotals()});
+ $$('[data-saved-entry]').forEach(input=>input.oninput=()=>{const entry=savedScoreEdit.entries[+input.dataset.savedEntry];input.value=normalizeFrame(input.value);entry.totalOnly=false;delete entry.manualTotal;entry.frames[+input.dataset.savedFrame]=input.value;updateSavedScoreTotals()});
  updateSavedScoreTotals();$('#savedScoreDialog').showModal();
 }
 function updateSavedScoreTotals(){
  if(!savedScoreEdit)return;
  let invalid=0;
  savedScoreEdit.entries.forEach((entry,index)=>{
-  const score=entry.absent?null:bowlingScore(entry.frames),total=$('[data-saved-total="'+index+'"]'),error=$('[data-saved-error="'+index+'"]');
-  total.textContent=entry.absent?'ABS — absent':'Total: '+(score??'—');total.classList.toggle('invalid',score===null);
-  error.textContent=!entry.absent&&score===null?'Finish or correct the frames for this game.':'';
-  $$('[data-saved-entry="'+index+'"]').forEach(input=>{input.disabled=!!entry.absent;input.setAttribute('aria-invalid',String(!entry.absent&&parseFrame(entry.frames[+input.dataset.savedFrame],+input.dataset.savedFrame)===null))});
+  const score=entryScore(entry),total=$('[data-saved-total="'+index+'"]'),error=$('[data-saved-error="'+index+'"]');
+  total.textContent=entry.absent?'ABS — absent':'Total: '+(score??'—')+(entry.totalOnly?' · Total only':'');
+  const manual=$('[data-saved-manual="'+index+'"]');manual.disabled=!!entry.absent;if(document.activeElement!==manual)manual.value=entry.totalOnly?(entry.manualTotal??entry.score??''):'';total.classList.toggle('invalid',score===null);
+  error.textContent=!entry.absent&&score===null?'Finish the frames or enter a total score from 0 to 300.':'';
+  $$('[data-saved-entry="'+index+'"]').forEach(input=>{input.disabled=!!entry.absent;input.setAttribute('aria-invalid',String(!entry.absent&&!entry.totalOnly&&parseFrame(entry.frames[+input.dataset.savedFrame],+input.dataset.savedFrame)===null))});
   if(!entry.absent&&score===null)invalid++;
  });
  $('#saveScoreChanges').disabled=invalid>0;
@@ -198,14 +213,14 @@ function saveScoreChanges(){
  if(team?.id!==savedScoreEdit.teamId||!night||JSON.stringify(night.entries)!==savedScoreEdit.originalEntries){
   $('#savedScoreStatus').textContent='This saved night changed. Cancel and reopen Edit Scores to load the latest copy.';return;
  }
- const entries=savedScoreEdit.entries.map(entry=>({...entry,frames:[...entry.frames],score:entry.absent?null:bowlingScore(entry.frames)}));
+ const entries=savedScoreEdit.entries.map(entry=>savedEntry(entry));
  if(entries.some(entry=>!entry.absent&&entry.score===null)){updateSavedScoreTotals();return;}
  night.entries=entries;night.editedAt=new Date().toISOString();
  closeSavedScoreEditor(true);persist();toast('Saved scores updated');
 }
 
 function isValidNightDate(value){if(!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;const date=new Date(value+'T12:00:00Z');return Number.isFinite(date.getTime())&&date.toISOString().slice(0,10)===value}
-function renderHistory(){const t=currentTeam();const el=$('#historyList');if(!t||!t.nights.length){el.innerHTML='<div class="empty">No saved league nights for this team.</div>';return}el.innerHTML=[...t.nights].sort((a,b)=>b.date.localeCompare(a.date)).map(n=>{const ids=[...new Set(n.entries.map(e=>e.bowlerId))];const rows=ids.map(id=>{const es=n.entries.filter(e=>e.bowlerId===id).sort((a,b)=>a.game-b.game);const sum=es.length===3&&es.every(e=>!e.absent&&Number.isFinite(e.score))?es.reduce((a,b)=>a+b.score,0):'—';const marks=personalBestData(t,id).achievements.get(n.id)||[];return `<div>${esc(es[0]?.name||'')}${marks.map(m=>`<span class="best-badge">🏆 ${m.first?(m.kind==='game'?'First high game':'First high series'):m.kind==='game'?'New high game':'New high series'}: ${m.score}${m.game?' · G'+m.game:''}</span>`).join('')}</div>${[1,2,3].map(g=>`<div>${es.find(e=>e.game===g)?.absent?'ABS':es.find(e=>e.game===g)?.score??'—'}</div>`).join('')}<div><strong>${sum}</strong></div>`}).join('');return `<div class="history-night"><div class="history-head wrap"><strong>${formatDate(n.date)}</strong><div class="row wrap"><button class="ghost icon-btn" data-edit-scores="${esc(n.id)}">Edit Scores</button><button class="ghost icon-btn" data-edit-night="${esc(n.id)}" aria-expanded="false" aria-controls="date-editor-${esc(n.id)}">Edit Date</button><button class="ghost danger icon-btn" data-delete-night="${n.id}">Delete</button></div></div><form id="date-editor-${esc(n.id)}" class="hidden" data-date-editor="${esc(n.id)}" style="padding:.8rem"><label for="saved-date-${esc(n.id)}">League night date<input id="saved-date-${esc(n.id)}" type="date" value="${esc(n.date)}" required></label><div class="row wrap"><button class="primary" type="submit">Save Date</button><button class="ghost" type="button" data-cancel-date="${esc(n.id)}">Cancel</button></div></form><div class="history-grid"><div>Bowler</div><div>G1</div><div>G2</div><div>G3</div><div>Series</div>${rows}</div></div>`}).join('');$$('[data-edit-scores]').forEach(btn=>btn.onclick=()=>openSavedScoreEditor(btn.dataset.editScores));$$('[data-edit-night]').forEach(btn=>btn.onclick=()=>{const form=document.getElementById('date-editor-'+btn.dataset.editNight);const opening=form.classList.contains('hidden');form.classList.toggle('hidden',!opening);btn.setAttribute('aria-expanded',String(opening));if(opening)form.querySelector('input').focus()});
+function renderHistory(){const t=currentTeam();const el=$('#historyList');if(!t||!t.nights.length){el.innerHTML='<div class="empty">No saved league nights for this team.</div>';return}el.innerHTML=[...t.nights].sort((a,b)=>b.date.localeCompare(a.date)).map(n=>{const ids=[...new Set(n.entries.map(e=>e.bowlerId))];const rows=ids.map(id=>{const es=n.entries.filter(e=>e.bowlerId===id).sort((a,b)=>a.game-b.game);const sum=es.length===3&&es.every(e=>!e.absent&&Number.isFinite(e.score))?es.reduce((a,b)=>a+b.score,0):'—';const marks=personalBestData(t,id).achievements.get(n.id)||[];return `<div>${esc(es[0]?.name||'')}${marks.map(m=>`<span class="best-badge">🏆 ${m.first?(m.kind==='game'?'First high game':'First high series'):m.kind==='game'?'New high game':'New high series'}: ${m.score}${m.game?' · G'+m.game:''}</span>`).join('')}</div>${[1,2,3].map(g=>`<div>${es.find(e=>e.game===g)?.absent?'ABS':es.find(e=>e.game===g)?.score??'—'}${es.find(e=>e.game===g)?.totalOnly?'<small> · Total only</small>':''}</div>`).join('')}<div><strong>${sum}</strong></div>`}).join('');return `<div class="history-night"><div class="history-head wrap"><strong>${formatDate(n.date)}</strong><div class="row wrap"><button class="ghost icon-btn" data-edit-scores="${esc(n.id)}">Edit Scores</button><button class="ghost icon-btn" data-edit-night="${esc(n.id)}" aria-expanded="false" aria-controls="date-editor-${esc(n.id)}">Edit Date</button><button class="ghost danger icon-btn" data-delete-night="${n.id}">Delete</button></div></div><form id="date-editor-${esc(n.id)}" class="hidden" data-date-editor="${esc(n.id)}" style="padding:.8rem"><label for="saved-date-${esc(n.id)}">League night date<input id="saved-date-${esc(n.id)}" type="date" value="${esc(n.date)}" required></label><div class="row wrap"><button class="primary" type="submit">Save Date</button><button class="ghost" type="button" data-cancel-date="${esc(n.id)}">Cancel</button></div></form><div class="history-grid"><div>Bowler</div><div>G1</div><div>G2</div><div>G3</div><div>Series</div>${rows}</div></div>`}).join('');$$('[data-edit-scores]').forEach(btn=>btn.onclick=()=>openSavedScoreEditor(btn.dataset.editScores));$$('[data-edit-night]').forEach(btn=>btn.onclick=()=>{const form=document.getElementById('date-editor-'+btn.dataset.editNight);const opening=form.classList.contains('hidden');form.classList.toggle('hidden',!opening);btn.setAttribute('aria-expanded',String(opening));if(opening)form.querySelector('input').focus()});
 $$('[data-cancel-date]').forEach(btn=>btn.onclick=()=>{const form=btn.closest('form');form.classList.add('hidden');const edit=$$('[data-edit-night]').find(b=>b.dataset.editNight===btn.dataset.cancelDate);edit.setAttribute('aria-expanded','false');form.querySelector('input').value=t.nights.find(n=>n.id===btn.dataset.cancelDate).date;edit.focus()});
 $$('[data-date-editor]').forEach(form=>form.onsubmit=e=>{e.preventDefault();const value=form.querySelector('input').value;if(!isValidNightDate(value))return toast('Choose a valid league night date');const night=t.nights.find(n=>n.id===form.dataset.dateEditor);if(!night)return;night.date=value;t.nights.sort((a,b)=>a.date.localeCompare(b.date));persist();toast('League night date updated')});
 $$('[data-delete-night]').forEach(btn=>btn.onclick=()=>{if(confirm('Delete this league night?')){t.nights=t.nights.filter(n=>n.id!==btn.dataset.deleteNight);persist();toast('League night deleted')}})}
@@ -523,9 +538,9 @@ function applyOcr(){
  if(ocrResult.teamId!==currentTeam()?.id)return toast('Read the photo again for this team');
  const game=nightDraft.games.find(g=>g.game===ocrResult.game);
  if(!game)return;
- if(game.bowlers.some(b=>b.absent||b.frames.some(Boolean))&&!confirm('Replace detected bowlers’ marks in Game '+game.game+'?'))return;
+ if(game.bowlers.some(b=>b.absent||b.totalOnly||b.frames.some(Boolean))&&!confirm('Replace detected bowlers’ marks in Game '+game.game+'?'))return;
  let filled=0;
- for(const row of ocrResult.rows){if(!row.bowlerId||row.bowlerId==='__skip__'||(!row.absent&&bowlingScore(row.frames)===null))continue;const b=game.bowlers.find(b=>b.bowlerId===row.bowlerId);if(b){b.absent=!!row.absent;b.frames=row.absent?Array(10).fill(''):[...row.frames];filled+=row.absent?0:10;}}
+ for(const row of ocrResult.rows){if(!row.bowlerId||row.bowlerId==='__skip__'||(!row.absent&&bowlingScore(row.frames)===null))continue;const b=game.bowlers.find(b=>b.bowlerId===row.bowlerId);if(b){b.totalOnly=false;delete b.manualTotal;b.absent=!!row.absent;b.frames=row.absent?Array(10).fill(''):[...row.frames];filled+=row.absent?0:10;}}
  renderScoreSheet();toast('Applied '+ocrResult.rows.filter(r=>r.bowlerId&&r.bowlerId!=='__skip__'&&r.absent).length+' ABS rows and '+filled+' frame marks to Game '+game.game+'. Verify before saving.');
 }
 function bowlerPdfData(){
@@ -588,6 +603,7 @@ function createBowlerPdf(model,PdfClass=window.jspdf.jsPDF){
   const scores=[1,2,3].map(g=>{const e=n.entries.find(e=>e.game===g);return e?.absent?'ABS':e?.score});
   tableRow([date(n.date),...scores.map(v=>v??'-'),scores.every(v=>Number.isFinite(v))?scores.reduce((a,b)=>a+b,0):'-'],summaryWidths);
  }
+ paragraph('* Total only: remembered game score; frame marks and strike/spare rates are unavailable for that game.',8);
  section('Frame-by-frame game details',160);
  const frameWidths=[38,...Array(10).fill(44),50];
  for(const n of nights){
@@ -595,7 +611,7 @@ function createBowlerPdf(model,PdfClass=window.jspdf.jsPDF){
   tableHead(['Game',...Array.from({length:10},(_,i)=>String(i+1)),'Total'],frameWidths);
   for(const game of [1,2,3]){
    const entry=n.entries.find(e=>e.game===game);
-   tableRow([game,...Array.from({length:10},(_,i)=>entry?.absent?'ABS':entry?.frames?.[i]||'-'),entry?.absent?'ABS':entry?.score??'-'],frameWidths,23);
+   tableRow([String(game)+(entry?.totalOnly?'*':''),...Array.from({length:10},(_,i)=>entry?.absent?'ABS':entry?.totalOnly?'-':entry?.frames?.[i]||'-'),entry?.absent?'ABS':entry?.score??'-'],frameWidths,23);
   }y+=12;
  }
  const pageCount=doc.getNumberOfPages();
@@ -647,7 +663,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
 if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
 window.bowlingCloud={
  payload:()=>JSON.stringify({version:1,seasons:state.seasons}),
- hasDraft:()=>!!savedScoreEdit||!!nightDraft?.games.some(g=>g.bowlers.some(b=>b.absent||b.frames.some(Boolean))),
+ hasDraft:()=>!!savedScoreEdit||!!nightDraft?.games.some(g=>g.bowlers.some(b=>b.absent||b.totalOnly||b.frames.some(Boolean))),
  local:()=>JSON.parse(localStorage.getItem(STORE_KEY)||JSON.stringify(blankState())),
  scope:userId=>{activeStoreKey=userId?STORE_KEY+'.account.'+userId:STORE_KEY;try{state=JSON.parse(localStorage.getItem(activeStoreKey))||blankState()}catch{state=blankState()}nightDraft=null;renderAll()},
  replace:payload=>{const data=JSON.parse(payload);if(!Array.isArray(data.seasons))throw Error('Invalid cloud data');state={version:1,seasons:data.seasons,selected:state.selected||blankState().selected};nightDraft=null;localStorage.setItem(activeStoreKey,JSON.stringify(state));renderAll()},
