@@ -414,21 +414,33 @@ function readDigitalGrid(data,w,h,adjusted=false){
  return rows;
 }
 function renderOcrReview(rows,grid){
+ rows.forEach(r=>r.frames=Array.from({length:10},(_,i)=>r.frames?.[i]||''));
  $('#ocrDetected').innerHTML=rows.map((r,i)=>'<div class="game-block"><strong>'+esc(r.name)+'</strong>'+
- (grid?'<label>Bowler<select data-ocr-row="'+i+'"><option value="">Choose bowler for this row</option>'+currentTeam().bowlers.map(b=>'<option value="'+b.id+'">'+esc(b.name)+'</option>').join('')+'</select></label>':'')+
- '<label class="small"><input type="checkbox" data-ocr-absent="'+i+'" '+(r.absent?'checked':'')+'> Absent (ABS) — no played score</label><p class="muted small">'+esc(r.line)+'</p><div class="row wrap">'+r.frames.map((f,fi)=>'<label>Frame '+(fi+1)+'<input data-ocr-frame="'+i+':'+fi+'" value="'+esc(f)+'" maxlength="3" style="width:65px"></label>').join('')+'</div></div>').join('');
+ '<label>Bowler<select data-ocr-row="'+i+'"><option value="">Choose bowler for this row</option><option value="__skip__">Skip this row</option>'+currentTeam().bowlers.map(b=>'<option value="'+esc(b.id)+'" '+(r.bowlerId===b.id?'selected':'')+'>'+esc(b.name)+'</option>').join('')+'</select></label>'+
+ '<label class="small"><input type="checkbox" data-ocr-absent="'+i+'" '+(r.absent?'checked':'')+'> Absent (ABS) — no played score</label><p class="muted small">'+esc(r.line)+'</p><div class="row wrap">'+r.frames.map((f,fi)=>'<label>Frame '+(fi+1)+'<input data-ocr-frame="'+i+':'+fi+'" value="'+esc(f)+'" maxlength="4" aria-label="'+esc(r.name)+', frame '+(fi+1)+'" style="width:65px"></label>').join('')+'<p class="small" data-ocr-feedback="'+i+'" role="status"></p></div>').join('');
  $$('[data-ocr-absent]').forEach(el=>el.onchange=()=>{ocrResult.rows[+el.dataset.ocrAbsent].absent=el.checked;updateOcrApply()});
- $$('[data-ocr-row]').forEach(el=>el.onchange=()=>{const row=ocrResult.rows[+el.dataset.ocrRow];row.bowlerId=el.value;updateOcrApply();});
- $$('[data-ocr-frame]').forEach(el=>el.oninput=()=>{const [r,f]=el.dataset.ocrFrame.split(':').map(Number);ocrResult.rows[r].frames[f]=normalizeFrame(el.value);updateOcrApply();});
+ $$('[data-ocr-row]').forEach(el=>el.onchange=()=>{ocrResult.rows[+el.dataset.ocrRow].bowlerId=el.value;updateOcrApply()});
+ $$('[data-ocr-frame]').forEach(el=>el.oninput=()=>{const [r,f]=el.dataset.ocrFrame.split(':').map(Number);el.value=normalizeFrame(el.value);ocrResult.rows[r].frames[f]=el.value;updateOcrApply()});
  updateOcrApply();
 }
-function updateOcrApply(){
- const valid=ocrResult?.rows.filter(r=>r.bowlerId&&(r.absent||bowlingScore(r.frames)!==null))||[];
- $$('[data-ocr-frame]').forEach(el=>el.disabled=!!ocrResult?.rows[+el.dataset.ocrFrame.split(':')[0]].absent);
- const ids=valid.map(r=>r.bowlerId);
- $('#applyOcrBtn').disabled=!valid.length||new Set(ids).size!==ids.length;
+function ocrReviewIssues(){
+ const rows=ocrResult?.rows||[],ids=new Set(),issues=[];
+ rows.forEach((r,i)=>{
+  if(r.bowlerId==='__skip__')return;
+  if(!currentTeam()?.bowlers.some(b=>b.id===r.bowlerId)){issues.push({row:i,message:'Choose a bowler or select Skip this row.'});return}
+  if(ids.has(r.bowlerId))issues.push({row:i,message:'This bowler is assigned twice. Choose a different bowler or skip this row.'});
+  ids.add(r.bowlerId);
+  if(!r.absent&&bowlingScore(r.frames)===null){const frame=r.frames.findIndex((f,i)=>parseFrame(f,i)===null);issues.push({row:i,frame:frame>=0?frame:0,message:'Correct frame '+(frame>=0?frame+1:1)+' or mark this bowler ABS.'})}
+ });
+ if(!rows.some(r=>r.bowlerId&&r.bowlerId!=='__skip__'))issues.push({row:0,message:'Choose at least one bowler to apply.'});
+ return issues;
 }
-
+function updateOcrApply(){
+ const rows=ocrResult?.rows||[],issues=ocrReviewIssues();
+ $$('[data-ocr-frame]').forEach(el=>{const row=+el.dataset.ocrFrame.split(':')[0];el.disabled=!!rows[row]?.absent||rows[row]?.bowlerId==='__skip__'});
+ rows.forEach((r,i)=>{const el=$('[data-ocr-feedback="'+i+'"]');if(el)el.textContent=r.bowlerId==='__skip__'?'This row will be skipped.':issues.filter(x=>x.row===i).map(x=>x.message).join(' ')||'Ready to apply.'});
+ $('#applyOcrBtn').disabled=!rows.length;
+}
 async function findDigitalGridAutomatically(file){
  const original=await prepareScoreboard(file,false,true,false);
  const settings=[[+$('#ocrBrightness').value,+$('#ocrContrast').value,'your photo settings'],[0,1,'original colors'],[25,1,'brighter'],[-25,1,'darker'],[0,1.3,'higher contrast'],[25,1.3,'brighter with higher contrast'],[0,.8,'softer contrast'],[50,1,'extra brightness']];
@@ -507,14 +519,14 @@ async function runOcr(){
 }
 function applyOcr(){
  if(!ocrResult||!nightDraft)return;
- if($('#applyOcrBtn').disabled)return;
+ const issues=ocrReviewIssues();if(issues.length){updateOcrApply();const issue=issues[0];$('#ocrStatus').textContent='Row '+(issue.row+1)+': '+issue.message;toast(issue.message);const target=issue.frame!==undefined?$('[data-ocr-frame="'+issue.row+':'+issue.frame+'"]'):$('[data-ocr-row="'+issue.row+'"]');target?.focus();return;}
  if(ocrResult.teamId!==currentTeam()?.id)return toast('Read the photo again for this team');
  const game=nightDraft.games.find(g=>g.game===ocrResult.game);
  if(!game)return;
  if(game.bowlers.some(b=>b.absent||b.frames.some(Boolean))&&!confirm('Replace detected bowlers’ marks in Game '+game.game+'?'))return;
  let filled=0;
- for(const row of ocrResult.rows){if(!row.bowlerId||(!row.absent&&bowlingScore(row.frames)===null))continue;const b=game.bowlers.find(b=>b.bowlerId===row.bowlerId);if(b){b.absent=!!row.absent;b.frames=row.absent?Array(10).fill(''):[...row.frames];filled+=row.absent?0:10;}}
- renderScoreSheet();toast('Applied '+ocrResult.rows.filter(r=>r.bowlerId&&r.absent).length+' ABS rows and '+filled+' frame marks to Game '+game.game+'. Verify before saving.');
+ for(const row of ocrResult.rows){if(!row.bowlerId||row.bowlerId==='__skip__'||(!row.absent&&bowlingScore(row.frames)===null))continue;const b=game.bowlers.find(b=>b.bowlerId===row.bowlerId);if(b){b.absent=!!row.absent;b.frames=row.absent?Array(10).fill(''):[...row.frames];filled+=row.absent?0:10;}}
+ renderScoreSheet();toast('Applied '+ocrResult.rows.filter(r=>r.bowlerId&&r.bowlerId!=='__skip__'&&r.absent).length+' ABS rows and '+filled+' frame marks to Game '+game.game+'. Verify before saving.');
 }
 function bowlerPdfData(){
  const team=currentTeam(),id=state.selected.bowlerId,bowler=dashboardBowlers(team).find(b=>b.id===id);
