@@ -251,7 +251,7 @@ function refreshPhotoAdjustments(){
  $('#ocrStatus').textContent='Photo settings changed. Click Read Scoreboard to retry.';
 }
 
-async function prepareScoreboard(file,enhance,preserveSize=false){
+async function prepareScoreboard(file,enhance,preserveSize=false,useSettings=true){
  const url=URL.createObjectURL(file),img=new Image();
  try{
   await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=()=>reject(new Error('This photo format could not be opened. Please upload a JPG or PNG.'));img.src=url;});
@@ -259,7 +259,7 @@ async function prepareScoreboard(file,enhance,preserveSize=false){
   const scale=Math.min(preserveSize?1:2,3200/Math.max(img.naturalWidth,img.naturalHeight));
   canvas.width=Math.round(img.naturalWidth*scale);canvas.height=Math.round(img.naturalHeight*scale);
   const ctx=canvas.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);
-  const brightness=+$('#ocrBrightness').value,contrast=+$('#ocrContrast').value;
+  const brightness=useSettings?+$('#ocrBrightness').value:0,contrast=useSettings?+$('#ocrContrast').value:1;
   if(brightness!==0||contrast!==1){const image=ctx.getImageData(0,0,canvas.width,canvas.height);image.data.set(adjustScoreboardPixels(image.data,brightness,contrast));ctx.putImageData(image,0,0);}
   if(enhance){
    const pixels=ctx.getImageData(0,0,canvas.width,canvas.height),d=pixels.data;let sum=0;
@@ -429,6 +429,29 @@ function updateOcrApply(){
  $('#applyOcrBtn').disabled=!valid.length||new Set(ids).size!==ids.length;
 }
 
+async function findDigitalGridAutomatically(file){
+ const original=await prepareScoreboard(file,false,true,false);
+ const settings=[[+$('#ocrBrightness').value,+$('#ocrContrast').value,'your photo settings'],[0,1,'original colors'],[25,1,'brighter'],[-25,1,'darker'],[0,1.3,'higher contrast'],[25,1.3,'brighter with higher contrast'],[0,.8,'softer contrast'],[50,1,'extra brightness']];
+ const unique=settings.filter((s,i,a)=>a.findIndex(t=>t[0]===s[0]&&t[1]===s[1])===i);
+ let attempts=0,lastError;
+ for(const target of [1338,1024]){
+  const width=Math.min(target,original.width),height=Math.round(original.height*width/original.width),canvas=document.createElement('canvas');
+  canvas.width=width;canvas.height=height;
+  const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.drawImage(original,0,0,width,height);
+  const raw=ctx.getImageData(0,0,width,height).data;
+  for(const [brightness,contrast,label] of unique){
+   attempts++;$('#ocrStatus').textContent='Finding the scoreboard grid… attempt '+attempts+' ('+label+', '+width+'px).';
+   await new Promise(resolve=>setTimeout(resolve,0));
+   const data=brightness===0&&contrast===1?raw:adjustScoreboardPixels(raw,brightness,contrast);
+   try{
+    const rows=readDigitalGrid(data,width,height);
+    return {rows,data,width,height,label,attempts};
+   }catch(error){lastError=error;}
+  }
+ }
+ throw new Error('Grid not found after '+attempts+' automatic size, brightness and contrast attempts. Include the full grid, photograph it straight on, or choose standard OCR for this display. '+(lastError?.message?.includes('No bowler')?'No bowler rows could be identified.':''));
+}
+
 async function runOcr(){
  const file=$('#scoreboardImage').files[0],team=currentTeam();
  if(!file)return toast('Choose a scoreboard photo first');
@@ -438,20 +461,19 @@ async function runOcr(){
  ocrResult=null;$('#applyOcrBtn').disabled=true;$('#ocrProgress').classList.remove('hidden');$('#ocrDetails').classList.add('hidden');$('#runOcrBtn').disabled=true;$('#ocrStatus').textContent='Loading the OCR engine…';
  try{
   if($('#ocrMode').value==='digital'){
-   const original=await prepareScoreboard(file,false,true),ctx=original.getContext('2d');
-   let pixels=ctx.getImageData(0,0,original.width,original.height).data;
-   let rows=readDigitalGrid(pixels,original.width,original.height);
+   const found=await findDigitalGridAutomatically(file);
+   const pixels=found.data;let rows=found.rows;
    if(rows.some(r=>r.frames.some(f=>!f))){
     $('#ocrStatus').textContent='Retrying faint marks with extra contrast…';
     try{
-     const retry=readDigitalGrid(adjustScoreboardPixels(pixels,0,1.25),original.width,original.height);
+     const retry=readDigitalGrid(adjustScoreboardPixels(pixels,0,1.25),found.width,found.height);
      if(retry.length===rows.length)rows=rows.map((r,ri)=>({...r,frames:r.frames.map((f,fi)=>{
       const other=retry[ri].frames[fi];return f&&other&&f!==other?'':f||other||'';
      })}));
     }catch(e){/* Keep the original reading when extra contrast hides grid lines. */}
    }
    if(currentTeam()?.id!==teamId)throw new Error('The selected team changed. Read this photo again.');
-   ocrResult={text:'Digital grid reader: check all marks. Highlighted first-ball marks are read separately. Verify all detected values.',rows,teamId,game};
+   ocrResult={text:'Grid found automatically after '+found.attempts+' attempt(s) using '+found.label+' at '+found.width+'px. Check all marks; highlighted split marks are read separately. Verify every frame before saving.',rows,teamId,game};
    $('#ocrText').textContent=ocrResult.text;
    renderOcrReview(rows,true);
    $('#ocrDetails').classList.remove('hidden');$('#ocrDetails').open=true;
