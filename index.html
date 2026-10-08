@@ -7,7 +7,7 @@
   <title>StrikeScan · League Night</title>
   <link rel="icon" type="image/svg+xml" sizes="any" href="ball-pin.svg?v=20261002-icon1" />
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="styles.css?v=20261008-total1" />
+  <link rel="stylesheet" href="styles.css?v=20261008-autoapply1" />
 </head>
 <body>
   <header class="topbar graphic-topbar">
@@ -138,7 +138,6 @@
         </div><p class="muted small">Try contrast around 1.25× first. Click Read Scoreboard after changing settings. Extra contrast is also tried automatically for missing marks.</p>
         <div class="row wrap">
           <button id="runOcrBtn" class="primary">Read Scoreboard</button>
-          <button id="applyOcrBtn" class="ghost" disabled>Apply OCR to Score Sheet</button>
         </div>
         <div id="ocrProgress" class="progress hidden"><div id="ocrProgressBar"></div></div>
         <div id="ocrStatus" class="muted small"></div>
@@ -157,6 +156,7 @@
           </div>
           <button id="clearNightBtn" class="danger ghost">Clear</button>
         </div>
+        <p class="ocr-legend"><span aria-hidden="true">🟨</span> Amber frames need OCR review. Correct them in the score sheet before saving.</p>
         <div id="scoreSheet" class="score-sheet"></div>
         <div class="savebar">
           <div id="nightValidation" class="muted"></div>
@@ -249,7 +249,7 @@
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script src="vendor/jspdf.umd.min.js"></script>
   <script src="pdf-header.js?v=20261003-leopard2"></script>
-  <script src="app.js?v=20261008-total1"></script>
+  <script src="app.js?v=20261008-autoapply1"></script>
   <script type="module" src="cloud-sync.js?v=20261002-cloud1"></script>
 </body>
 </html>
