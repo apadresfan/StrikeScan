@@ -197,3 +197,5 @@ body{background:#e6bd77 url("leopard-print.svg?v=20261003-bg1") repeat;backgroun
 label:has(>input[type="checkbox"]){display:flex;align-items:center;gap:8px;min-height:44px;cursor:pointer}input[type="checkbox"]{width:20px;min-width:20px;height:20px;min-height:20px;padding:0;accent-color:#176e70}
 
 .game-total-input{display:inline-block;min-height:44px;font-size:16px;text-align:center;padding:.5rem .25rem;background:#fffdf7}.score-total small{display:block;font-size:.7rem;font-weight:600;margin-top:4px}.history-grid small{display:block;font-size:.7rem}
+
+.frame-input.ocr-uncertain{background:#fff0a5!important;outline:3px solid #c37c13;outline-offset:-3px;border-radius:6px}.ocr-legend{background:#fff9ee;border-left:4px solid #c37c13;border-radius:8px;padding:10px;font-size:.85rem}
