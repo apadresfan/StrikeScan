@@ -256,17 +256,8 @@ function adjustScoreboardPixels(data,brightness,contrast){
  for(let i=0;i<out.length;i+=4)for(let k=0;k<3;k++)out[i+k]=Math.max(0,Math.min(255,(out[i+k]-128)*contrast+128+brightness));
  return out;
 }
-function refreshPhotoAdjustments(){
- const b=+$('#ocrBrightness').value,c=+$('#ocrContrast').value;
- $('#brightnessValue').textContent=(b>=0?'+':'')+b;
- $('#contrastValue').textContent=c.toFixed(2)+'×';
- // CSS brightness is only a preview approximation; OCR uses the numeric pixel adjustment.
- $('#imagePreview').style.filter='contrast('+c+') brightness('+(1+b/128)+')';
- ocrResult=null;$('#ocrDetails').classList.add('hidden');
- $('#ocrStatus').textContent='Photo settings changed. Click Read Scoreboard to retry.';
-}
 
-async function prepareScoreboard(file,enhance,preserveSize=false,useSettings=true){
+async function prepareScoreboard(file,enhance,preserveSize=false){
  const url=URL.createObjectURL(file),img=new Image();
  try{
   await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=()=>reject(new Error('This photo format could not be opened. Please upload a JPG or PNG.'));img.src=url;});
@@ -274,8 +265,6 @@ async function prepareScoreboard(file,enhance,preserveSize=false,useSettings=tru
   const scale=Math.min(preserveSize?1:2,3200/Math.max(img.naturalWidth,img.naturalHeight));
   canvas.width=Math.round(img.naturalWidth*scale);canvas.height=Math.round(img.naturalHeight*scale);
   const ctx=canvas.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);
-  const brightness=useSettings?+$('#ocrBrightness').value:0,contrast=useSettings?+$('#ocrContrast').value:1;
-  if(brightness!==0||contrast!==1){const image=ctx.getImageData(0,0,canvas.width,canvas.height);image.data.set(adjustScoreboardPixels(image.data,brightness,contrast));ctx.putImageData(image,0,0);}
   if(enhance){
    const pixels=ctx.getImageData(0,0,canvas.width,canvas.height),d=pixels.data;let sum=0;
    for(let i=0;i<d.length;i+=4)sum+=.299*d[i]+.587*d[i+1]+.114*d[i+2];
@@ -467,8 +456,8 @@ function flagOcrDisagreements(best,readings){
  return best.rows.map((row,i)=>({...row,uncertain:Array.from({length:10},(_,f)=>!!row.uncertain?.[f]||parseFrame(row.frames?.[f],f)===null||readings.some(rows=>rows.length===best.rows.length&&rows[i].frames?.[f]&&parseFrame(rows[i].frames[f],f)!==null&&rows[i].frames[f]!==row.frames?.[f]))}));
 }
 async function findDigitalGridAutomatically(file){
- const original=await prepareScoreboard(file,false,true,false);
- const settings=[[+$('#ocrBrightness').value,+$('#ocrContrast').value,'your photo settings'],[0,1,'original colors'],[25,1,'brighter'],[-25,1,'darker'],[0,1.3,'higher contrast'],[25,1.3,'brighter with higher contrast'],[0,.8,'softer contrast'],[50,1,'extra brightness'],[-40,1.5,'darker with higher contrast'],[45,1.6,'stronger exposure recovery']];
+ const original=await prepareScoreboard(file,false,true);
+ const settings=[[0,1,'original colors'],[25,1,'brighter'],[-25,1,'darker'],[0,1.3,'higher contrast'],[25,1.3,'brighter with higher contrast'],[0,.8,'softer contrast'],[50,1,'extra brightness'],[-40,1.5,'darker with higher contrast'],[45,1.6,'stronger exposure recovery']];
  const unique=settings.filter((s,i,a)=>a.findIndex(t=>t[0]===s[0]&&t[1]===s[1])===i);
  let attempts=0,best=null;const readings=[];
  for(const target of [...new Set([Math.min(1338,original.width),Math.min(1024,original.width)])]){
@@ -492,7 +481,7 @@ async function findDigitalGridAutomatically(file){
  throw new Error('Grid and scores not found after '+attempts+' automatic size, brightness and contrast attempts. Include the full grid, photograph it straight on, or try standard OCR.');
 }
 async function readStandardScoresAutomatically(worker,file){
- const raw=await prepareScoreboard(file,false,false,false);
+ const raw=await prepareScoreboard(file,false);
  const presets=[[null,null,'enhanced photo','6'],[0,1,'original photo','3'],[25,1,'brighter','6'],[-25,1,'darker','3'],[0,1.5,'higher contrast','6'],[25,1.4,'brighter with contrast','3'],[0,.75,'softer contrast','6'],[50,1.2,'extra brightness','3']];
  let best=null,attempts=0;
  for(const [brightness,contrast,label,layout] of presets){
@@ -689,9 +678,6 @@ $('#downloadBowlerPdfBtn').onclick=downloadBowlerPdf;
 $('#shareBowlerPdfBtn').onclick=shareBowlerPdf;
 $('#addSeasonBtn').onclick=addSeason;$('#addLeagueBtn').onclick=addLeague;$('#addTeamBtn').onclick=addTeam;$('#addBowlerBtn').onclick=addBowler;$('#saveNightBtn').onclick=saveNight;$('#clearNightBtn').onclick=clearNight;$('#runOcrBtn').onclick=runOcr;$('#exportBtn').onclick=exportBackup;$('#importBtn').onclick=importBackup;
 $('#scoreboardImage').onchange=()=>{const f=$('#scoreboardImage').files[0];if(!f)return;$('#imagePreview').src=URL.createObjectURL(f);$('#imagePreviewWrap').classList.remove('hidden');ocrResult=null;$('#ocrDetails').classList.add('hidden')};
-$('#ocrBrightness').oninput=refreshPhotoAdjustments;
-$('#ocrContrast').oninput=refreshPhotoAdjustments;
-$('#resetPhotoAdjustments').onclick=()=>{$('#ocrBrightness').value='0';$('#ocrContrast').value='1';refreshPhotoAdjustments();};
 $('#saveScoreChanges').onclick=saveScoreChanges;$('#cancelScoreChanges').onclick=()=>closeSavedScoreEditor();$('#savedScoreDialog').addEventListener('cancel',event=>{event.preventDefault();closeSavedScoreEditor()});
 $('#nightDate').value=new Date().toISOString().slice(0,10);
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;$('#installBtn').classList.remove('hidden')});$('#installBtn').onclick=async()=>{if(deferredPrompt){deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null;$('#installBtn').classList.add('hidden')}};
