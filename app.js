@@ -456,27 +456,61 @@ function updateOcrReview(){
  rows.forEach((r,i)=>{const el=$('[data-ocr-feedback="'+i+'"]');if(el)el.textContent=r.bowlerId==='__skip__'?'This row will be skipped.':issues.filter(x=>x.row===i).map(x=>x.message).join(' ')||'Added to score sheet. Review highlighted frames below.'});
  syncOcrToScoreSheet();
 }
+function ocrReadingQuality(rows){
+ let valid=0,complete=0,certain=0;
+ for(const row of rows){let count=0;for(let f=0;f<10;f++)if(parseFrame(row.frames?.[f],f)!==null){valid++;count++;if(!row.uncertain?.[f])certain++;}
+ if(count===10&&bowlingScore(row.frames)!==null)complete++;}
+ return {valid,complete,rank:valid*100+complete*10+certain,finished:rows.length>0&&complete===rows.length&&certain===rows.length*10};
+}
+function flagOcrDisagreements(best,readings){
+ // Compare row positions only when the detected grid has the same row count.
+ return best.rows.map((row,i)=>({...row,uncertain:Array.from({length:10},(_,f)=>!!row.uncertain?.[f]||parseFrame(row.frames?.[f],f)===null||readings.some(rows=>rows.length===best.rows.length&&rows[i].frames?.[f]&&parseFrame(rows[i].frames[f],f)!==null&&rows[i].frames[f]!==row.frames?.[f]))}));
+}
 async function findDigitalGridAutomatically(file){
  const original=await prepareScoreboard(file,false,true,false);
- const settings=[[+$('#ocrBrightness').value,+$('#ocrContrast').value,'your photo settings'],[0,1,'original colors'],[25,1,'brighter'],[-25,1,'darker'],[0,1.3,'higher contrast'],[25,1.3,'brighter with higher contrast'],[0,.8,'softer contrast'],[50,1,'extra brightness']];
+ const settings=[[+$('#ocrBrightness').value,+$('#ocrContrast').value,'your photo settings'],[0,1,'original colors'],[25,1,'brighter'],[-25,1,'darker'],[0,1.3,'higher contrast'],[25,1.3,'brighter with higher contrast'],[0,.8,'softer contrast'],[50,1,'extra brightness'],[-40,1.5,'darker with higher contrast'],[45,1.6,'stronger exposure recovery']];
  const unique=settings.filter((s,i,a)=>a.findIndex(t=>t[0]===s[0]&&t[1]===s[1])===i);
- let attempts=0,lastError;
- for(const target of [1338,1024]){
-  const width=Math.min(target,original.width),height=Math.round(original.height*width/original.width),canvas=document.createElement('canvas');
+ let attempts=0,best=null;const readings=[];
+ for(const target of [...new Set([Math.min(1338,original.width),Math.min(1024,original.width)])]){
+  const width=target,height=Math.round(original.height*width/original.width),canvas=document.createElement('canvas');
   canvas.width=width;canvas.height=height;
   const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.drawImage(original,0,0,width,height);
   const raw=ctx.getImageData(0,0,width,height).data;
   for(const [brightness,contrast,label] of unique){
-   attempts++;$('#ocrStatus').textContent='Finding the scoreboard grid… attempt '+attempts+' ('+label+', '+width+'px).';
+   attempts++;$('#ocrStatus').textContent='Looking for scores… attempt '+attempts+' ('+label+'). Best reading: '+(best?.quality.valid||0)+' frames.';
    await new Promise(resolve=>setTimeout(resolve,0));
    const data=brightness===0&&contrast===1?raw:adjustScoreboardPixels(raw,brightness,contrast);
    try{
-    const rows=readDigitalGrid(data,width,height);
-    return {rows,data,width,height,label,attempts};
-   }catch(error){lastError=error;}
+    const rows=readDigitalGrid(data,width,height),quality=ocrReadingQuality(rows);
+    readings.push(rows);
+    if(!best||quality.rank>best.quality.rank)best={rows,width,height,label,brightness,contrast,quality};
+    if(quality.finished){best.rows=flagOcrDisagreements(best,readings);return {...best,attempts};}
+   }catch(error){/* Try the next exposure or size when grid detection fails. */}
   }
  }
- throw new Error('Grid not found after '+attempts+' automatic size, brightness and contrast attempts. Include the full grid, photograph it straight on, or choose standard OCR for this display. '+(lastError?.message?.includes('No bowler')?'No bowler rows could be identified.':''));
+ if(best){best.rows=flagOcrDisagreements(best,readings);return {...best,attempts};}
+ throw new Error('Grid and scores not found after '+attempts+' automatic size, brightness and contrast attempts. Include the full grid, photograph it straight on, or try standard OCR.');
+}
+async function readStandardScoresAutomatically(worker,file){
+ const raw=await prepareScoreboard(file,false,false,false);
+ const presets=[[null,null,'enhanced photo','6'],[0,1,'original photo','3'],[25,1,'brighter','6'],[-25,1,'darker','3'],[0,1.5,'higher contrast','6'],[25,1.4,'brighter with contrast','3'],[0,.75,'softer contrast','6'],[50,1.2,'extra brightness','3']];
+ let best=null,attempts=0;
+ for(const [brightness,contrast,label,layout] of presets){
+  attempts++;$('#ocrStatus').textContent='Trying '+label+' for scores… '+attempts+' of '+presets.length+'.';
+  await new Promise(resolve=>setTimeout(resolve,0));
+  let canvas;
+  if(brightness===null)canvas=await prepareScoreboard(file,true);
+  else{
+   canvas=document.createElement('canvas');canvas.width=raw.width;canvas.height=raw.height;
+   const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.drawImage(raw,0,0);
+   if(brightness!==0||contrast!==1){const pixels=ctx.getImageData(0,0,raw.width,raw.height);pixels.data.set(adjustScoreboardPixels(pixels.data,brightness,contrast));ctx.putImageData(pixels,0,0);}
+  }
+  await worker.setParameters({tessedit_pageseg_mode:layout,preserve_interword_spaces:'1'});
+  const result=await worker.recognize(canvas),text=result.data.text||'',rows=detectOcrRows(text),quality=ocrReadingQuality(rows);
+  if(!best||quality.rank>best.quality.rank)best={text,rows,quality,label};
+  if(quality.complete===rows.length&&rows.length&&quality.valid>0)break;
+ }
+ return {...best,attempts};
 }
 
 async function runOcr(){
@@ -489,38 +523,21 @@ async function runOcr(){
  try{
   if($('#ocrMode').value==='digital'){
    const found=await findDigitalGridAutomatically(file);
-   const pixels=found.data;let rows=found.rows;
-   if(rows.some(r=>r.frames.some(f=>!f))){
-    $('#ocrStatus').textContent='Retrying faint marks with extra contrast…';
-    try{
-     const retry=readDigitalGrid(adjustScoreboardPixels(pixels,0,1.25),found.width,found.height);
-     if(retry.length===rows.length)rows=rows.map((r,ri)=>({...r,frames:r.frames.map((f,fi)=>{
-      const other=retry[ri].frames[fi];return f&&other&&f!==other?'':f||other||'';
-     })}));
-    }catch(e){/* Keep the original reading when extra contrast hides grid lines. */}
-   }
+   const rows=found.rows;
    if(currentTeam()?.id!==teamId)throw new Error('The selected team changed. Read this photo again.');
-   ocrResult={text:'Grid found automatically after '+found.attempts+' attempt(s) using '+found.label+' at '+found.width+'px. Check all marks; highlighted split marks are read separately. Verify every frame before saving.',rows,teamId,game};
+   ocrResult={text:'Automatic score search: '+found.quality.valid+' readable frames after '+found.attempts+' attempt(s). Best settings: '+found.label+' at '+found.width+'px. Review all scores and amber highlights.',rows,teamId,game};
    $('#ocrText').textContent=ocrResult.text;
    renderOcrReview(rows,true);
    $('#ocrDetails').classList.remove('hidden');$('#ocrDetails').open=true;
-   $('#ocrStatus').textContent='Read '+rows.length+' rows for Game '+game+'. Assigned rows are added automatically. Check bowler assignments (matching rows use roster order) and review highlighted frames on the score sheet.';
+   $('#ocrStatus').textContent=(found.quality.valid?'Read '+found.quality.valid+' frames in '+rows.length+' rows':'Grid found, but no scores could be read after '+found.attempts+' adjustments. Enter scores or a remembered total manually')+'. Game '+game+'. Assigned rows are added automatically. Check bowler assignments (matching rows use roster order) and review highlighted frames on the score sheet.';
    return;
   }
   worker=await Tesseract.createWorker('eng',1,{logger:m=>{
    $('#ocrStatus').textContent=m.status==='recognizing text'?'Reading scoreboard… '+Math.round((m.progress||0)*100)+'%':m.status;
    $('#ocrProgressBar').style.width=Math.round((m.progress||0)*100)+'%';
   }});
-  await worker.setParameters({tessedit_pageseg_mode:'6',preserve_interword_spaces:'1'});
-  const enhanced=await prepareScoreboard(file,true);
-  let result=await worker.recognize(enhanced),text=result.data.text||'',rows=detectOcrRows(text);
-  if(!rows.some(r=>r.frames.length===10)){
-   $('#ocrStatus').textContent='Trying the original photo with a different reading layout…';
-   await worker.setParameters({tessedit_pageseg_mode:'3'});
-   const original=await prepareScoreboard(file,false),retry=await worker.recognize(original);
-   const retryRows=detectOcrRows(retry.data.text||'');
-   if(retryRows.filter(r=>r.frames.length===10).length>rows.filter(r=>r.frames.length===10).length||(!text.trim()&&(retry.data.text||'').trim())){text=retry.data.text||'';rows=retryRows;}
-  }
+  const standard=await readStandardScoresAutomatically(worker,file);
+  const {text,rows}=standard;
   if(currentTeam()?.id!==teamId)throw new Error('The selected team changed. Select the correct team and read this photo again.');
   ocrResult={text,rows,teamId,game};
   $('#ocrText').textContent=text||'No text was recognized.';
