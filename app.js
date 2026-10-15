@@ -352,6 +352,27 @@ function readSplitSecondRoll(data,w,edge,top){
  return best.error<.28?best.char:null;
 }
 
+function readFrameAtThreshold(lit,x0,x1,y0,y1,scale,frame){
+ const runs=[];
+ for(let x=x0;x<x1;x++){let n=0;for(let y=y0;y<y1;y++)if(lit(x,y))n++;if(n){if(!runs.length||x>runs.at(-1).at(-1)+1)runs.push([x]);else runs.at(-1).push(x);}}
+ let marks='',error=0,count=0,margin=1;
+ for(const run of runs){
+  if(run.length<=8*scale)continue;
+  const a=run[0],b=run.at(-1)+1;let c=y1,d=y0;
+  for(let y=y0;y<y1;y++)for(let x=a;x<b;x++)if(lit(x,y)){c=Math.min(c,y);d=Math.max(d,y+1);}
+  if(d<=c)continue;
+  const aspect=(b-a)/(d-c);
+  if(aspect>2.5){marks+='-';count++;continue;}
+  let mask='';
+  for(let yy=0;yy<24;yy++)for(let xx=0;xx<16;xx++)mask+=lit(Math.min(b-1,a+Math.floor((xx+.5)*(b-a)/16)),Math.min(d-1,c+Math.floor((yy+.5)*(d-c)/24)))?'1':'0';
+  const matches=GRID_FONT.map(t=>{let differences=0;for(let i=0;i<mask.length;i++)if(mask[i]!==t.mask[i])differences++;return {char:t.char,error:differences/mask.length+Math.min(.4,Math.abs(Math.log(aspect/t.aspect))*.15)}}).sort((a,b)=>a.error-b.error);
+  if(matches[0].error>.28)return null;
+  marks+=matches[0].char;error+=matches[0].error;count++;margin=Math.min(margin,matches[1].error-matches[0].error);
+ }
+ if(parseFrame(marks,frame)===null)return null;
+ return {mark:marks,error:error/Math.max(1,count),margin};
+}
+
 function readDigitalGrid(data,w,h,adjusted=false){
  let red=0,green=0;for(let i=0;i<data.length;i+=400){red+=data[i];green+=data[i+1];}const pink=red>green*1.15;
  const lit=(x,y)=>{const i=(y*w+x)*4;return adjusted?((data[i+1]>170&&data[i+2]>150)||(data[i]>170&&data[i+2]>170)):(data[i+1]>110&&data[i+2]>110&&data[i]<data[i+1]*.85)};
@@ -380,30 +401,15 @@ function readDigitalGrid(data,w,h,adjusted=false){
   for(let f=0;f<10;f++){
    const scale=w/1338,x0=Math.round(frameEdges[f])+Math.max(3,Math.round(5*scale)),x1=Math.round(frameEdges[f+1])-Math.max(3,Math.round(4*scale));
    const y0=Math.round(top)+Math.max(3,Math.round(6*scale)),y1=Math.round(top+height*.43)-Math.max(2,Math.round(3*scale));
-   const runs=[];
-   for(let x=x0;x<x1;x++){
-    let n=0;for(let y=y0;y<y1;y++)if(glyphLit(x,y))n++;
-    if(n){if(!runs.length||x>runs.at(-1).at(-1)+1)runs.push([x]);else runs.at(-1).push(x);}
+   const candidates=[],normal=readFrameAtThreshold(glyphLit,x0,x1,y0,y1,scale,f);
+   if(normal)candidates.push(normal);
+   if(!pink)for(const threshold of [120,140,160,180]){
+    const shadeLit=(x,y)=>{const i=(y*w+x)*4;return data[i+1]>threshold&&data[i+2]>threshold&&data[i]<data[i+1]*.9};
+    const result=readFrameAtThreshold(shadeLit,x0,x1,y0,y1,scale,f);if(result)candidates.push(result);
    }
-   let marks='',uncertain=false,lowConfidence=false;
-   for(const run of runs){
-    if(run.length<=8*scale)continue;
-    const a=run[0],b=run.at(-1)+1;let c=y1,d=y0;
-    for(let y=y0;y<y1;y++)for(let x=a;x<b;x++)if(glyphLit(x,y)){c=Math.min(c,y);d=Math.max(d,y+1);}
-    if(d<=c)continue;
-    let mask='';
-    for(let yy=0;yy<24;yy++)for(let xx=0;xx<16;xx++)mask+=glyphLit(Math.min(b-1,a+Math.floor((xx+.5)*(b-a)/16)),Math.min(d-1,c+Math.floor((yy+.5)*(d-c)/24)))?'1':'0';
-    const aspect=(b-a)/(d-c);
-    if(aspect>2.5){marks+='-';continue;}
-    let best=null;
-    for(const t of GRID_FONT){
-     let differences=0;for(let i=0;i<mask.length;i++)if(mask[i]!==t.mask[i])differences++;
-     const error=differences/mask.length+Math.min(.4,Math.abs(Math.log(aspect/t.aspect))*.15);
-     if(!best||error<best.error)best={char:t.char,error};
-    }
-    if(best.error>.28){uncertain=true;break;}if(best.error>.18)lowConfidence=true;marks+=best.char;
-   }
-   let mark=!uncertain&&parseFrame(marks,f)!==null?marks:'';
+   candidates.sort((a,b)=>a.error-b.error);
+   const selected=candidates[0];
+   let mark=selected?.mark||'',lowConfidence=!selected||selected.error>.18||selected.margin<.025||candidates.some(c=>c.mark!==selected.mark);
    if(pink&&f<9&&!mark){
     const first=readSplitFirstRoll(data,w,h,frameEdges[f+1],top);
     const second=first?readSplitSecondRoll(data,w,frameEdges[f+1],top):null;
