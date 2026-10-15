@@ -7,7 +7,7 @@
   <title>StrikeScan · League Night</title>
   <link rel="icon" type="image/svg+xml" sizes="any" href="ball-pin.svg?v=20261002-icon1" />
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="styles.css?v=20261008-autoapply1" />
+  <link rel="stylesheet" href="styles.css?v=20261015-features1" />
 </head>
 <body>
   <header class="topbar graphic-topbar">
@@ -48,6 +48,7 @@
       </div>
       <div id="statCards" class="stat-grid"></div>
       <div id="bowlerStatCards" class="stat-grid"></div>
+      <p id="handicapSummary" class="card small hidden"></p>
       <p id="gameAverageSummary" class="muted small"></p>
       <div class="card"><h3>Personal bests</h3><div id="personalBests"></div></div>
       <div class="card progress-card"><h3>Bowler progress</h3><p class="muted small">Tap a score to see the game details.</p><div id="bowlerProgress"></div></div>
@@ -99,6 +100,7 @@
           <div id="bowlerList"></div>
         </div>
       </div>
+      <div class="card"><h2>League handicap</h2><p class="muted small">Handicap = percentage × (base score − average), with a minimum of zero. An entered average overrides the tracked season average. New games record their handicap when saved; existing games keep their recorded values.</p><form id="handicapForm"><label><input id="handicapEnabled" type="checkbox"> Enable handicap for this league</label><div class="selector-row"><label>Base score<input id="handicapBase" type="number" min="0" max="300" step="1" required value="200"></label><label>Percentage<input id="handicapPercent" type="number" min="0" max="100" step="0.1" required value="90"></label><label>Round handicap<select id="handicapRounding"><option value="floor">Down</option><option value="round">Nearest whole pin</option><option value="ceil">Up</option></select></label></div><div id="handicapAverages" class="selector-row"></div><button type="submit" class="primary">Save Handicap Settings</button></form></div>
       <div class="card notice">
         <strong>Each year stays separate.</strong> Create a new season, then create or reuse league/team names inside that season. Your history and statistics remain tied to the correct year.
       </div>
@@ -126,19 +128,23 @@
             <h2>Scoreboard Photo OCR</h2>
             <p class="muted">Upload or take a photo. The site reads it locally in your browser, then lets you review every frame before saving.</p>
           </div>
-          <span class="badge beta">OCR v7</span>
+          <span class="badge beta">Auto Scan</span>
         </div>
-        <label>Scoreboard style<select id="ocrMode"><option value="digital">Digital grid — turquoise, blue or pink</option><option value="standard">Other display — standard OCR</option></select></label><label>Game shown in this photo<select id="ocrGame"><option value="1">Game 1</option><option value="2">Game 2</option><option value="3">Game 3</option></select></label><p class="muted small">Use one game per photo. Include only your team, its bowler names, and all 10 frames.</p>
-        <input id="scoreboardImage" type="file" accept="image/*" aria-label="Choose a scoreboard photo" />
+        <label>Scoreboard style<select id="ocrMode"><option value="digital">Digital grid — turquoise, blue or pink</option><option value="standard">Other display — standard OCR</option></select></label><label>Game shown in this photo<select id="ocrGame"><option value="1">Game 1</option><option value="2">Game 2</option><option value="3">Game 3</option></select></label><p class="muted small">Choose up to three photos. Assign a different game number to each photo. Include only your team, its bowler names, all 10 frames, and the displayed totals.</p>
+        <input id="scoreboardImage" type="file" accept="image/*" aria-label="Choose up to three scoreboard photos" multiple />
+        <div id="scanFileList" class="scan-file-list"></div>
         <div id="imagePreviewWrap" class="hidden"><img id="imagePreview" alt="Scoreboard preview" /></div>
         <p class="muted small">Brightness and contrast are adjusted automatically while reading the scoreboard.</p>
         <div class="row wrap">
-          <button id="runOcrBtn" class="primary">Read Scoreboard</button>
+          <button id="runOcrBtn" class="primary">Read Scoreboard Photos</button>
+          <button id="cancelScanBtn" class="danger ghost hidden">Cancel Scan</button>
+          <button id="undoScanBtn" class="ghost" disabled>Undo Last Scan</button>
         </div>
         <div id="ocrProgress" class="progress hidden"><div id="ocrProgressBar"></div></div>
         <div id="ocrStatus" class="muted small"></div>
         <details id="ocrDetails" class="hidden">
           <summary>OCR text & detected rows</summary>
+          <div id="scanReviewControls" class="row wrap hidden"><label>Scanned game<select id="ocrReviewGame"></select></label><button id="rememberOrderBtn" class="ghost">Remember Bowler Order</button></div><p class="muted small">Check each row’s bowler. Remember the confirmed order for this team’s next scan. Review amber frames on the score sheet; total mismatches are marked separately.</p>
           <pre id="ocrText"></pre>
           <div id="ocrDetected"></div>
         </details>
@@ -240,12 +246,13 @@
     </div>
   </dialog>
 
+  <dialog id="frameReviewDialog" class="saved-score-dialog" aria-labelledby="frameReviewTitle"><h2 id="frameReviewTitle">Review frame</h2><canvas id="frameReviewPhoto" class="frame-review-photo hidden"></canvas><p id="frameReviewNoPhoto" class="muted small"></p><label>Frame marks<input id="frameReviewInput" maxlength="4" autocomplete="off" spellcheck="false"></label><p id="frameReviewStatus" role="status"></p><div class="row wrap"><button id="saveFrameReview" class="primary">Save Correction / Mark Reviewed</button><button id="closeFrameReview" class="ghost">Cancel</button></div></dialog>
   <div id="toast" class="toast" role="status"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script src="vendor/jspdf.umd.min.js"></script>
   <script src="pdf-header.js?v=20261003-leopard2"></script>
-  <script src="app.js?v=20261015-split-recovery1"></script>
+  <script src="app.js?v=20261015-features1"></script>
   <script type="module" src="cloud-sync.js?v=20261002-cloud1"></script>
 </body>
 </html>
