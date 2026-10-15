@@ -352,6 +352,19 @@ function readSplitSecondRoll(data,w,edge,top){
  return best.error<.28?best.char:null;
 }
 
+function distinguishFiveAndSix(mask,matches){
+ const best=matches[0];if(best.char!=='5'&&best.char!=='6')return matches;
+ const other=matches.find(m=>m.char===(best.char==='5'?'6':'5'));
+ if(!other||Math.abs(other.error-best.error)>.065)return matches;
+ // A six has a continuous lower-left stroke closing its bottom loop; a five does not.
+ let leftRows=0;
+ for(let y=13;y<=18;y++){let ink=0;for(let x=0;x<5;x++)if(mask[y*16+x]==='1')ink++;if(ink>=2)leftRows++;}
+ const wanted=leftRows>=5?'6':leftRows<=1?'5':null;
+ if(!wanted||wanted===best.char)return matches;
+ const chosen=matches.find(m=>m.char===wanted);
+ return [chosen,...matches.filter(m=>m!==chosen)];
+}
+
 function readFrameAtThreshold(lit,x0,x1,y0,y1,scale,frame){
  const runs=[];
  for(let x=x0;x<x1;x++){let n=0;for(let y=y0;y<y1;y++)if(lit(x,y))n++;if(n){if(!runs.length||x>runs.at(-1).at(-1)+1)runs.push([x]);else runs.at(-1).push(x);}}
@@ -365,7 +378,8 @@ function readFrameAtThreshold(lit,x0,x1,y0,y1,scale,frame){
   if(aspect>2.5){marks+='-';count++;continue;}
   let mask='';
   for(let yy=0;yy<24;yy++)for(let xx=0;xx<16;xx++)mask+=lit(Math.min(b-1,a+Math.floor((xx+.5)*(b-a)/16)),Math.min(d-1,c+Math.floor((yy+.5)*(d-c)/24)))?'1':'0';
-  const matches=GRID_FONT.map(t=>{let differences=0;for(let i=0;i<mask.length;i++)if(mask[i]!==t.mask[i])differences++;return {char:t.char,error:differences/mask.length+Math.min(.4,Math.abs(Math.log(aspect/t.aspect))*.15)}}).sort((a,b)=>a.error-b.error);
+  let matches=GRID_FONT.map(t=>{let differences=0;for(let i=0;i<mask.length;i++)if(mask[i]!==t.mask[i])differences++;return {char:t.char,error:differences/mask.length+Math.min(.4,Math.abs(Math.log(aspect/t.aspect))*.15)}}).sort((a,b)=>a.error-b.error);
+  matches=distinguishFiveAndSix(mask,matches);
   if(matches[0].error>.28)return null;
   marks+=matches[0].char;error+=matches[0].error;count++;margin=Math.min(margin,matches[1].error-matches[0].error);
  }
