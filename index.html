@@ -7,7 +7,7 @@
   <title>StrikeScan · League Night</title>
   <link rel="icon" type="image/svg+xml" sizes="any" href="ball-pin.svg?v=20261002-icon1" />
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="styles.css?v=20261015-features1" />
+  <link rel="stylesheet" href="styles.css?v=20261018-practice1" />
 </head>
 <body>
   <header class="topbar graphic-topbar">
@@ -18,7 +18,7 @@
   <nav class="tabs" aria-label="Main navigation">
     <button class="tab active" data-view="dashboard">Dashboard</button>
     <button class="tab" data-view="setup">Leagues</button>
-    <button class="tab" data-view="night">League Night</button>
+    <button class="tab" data-view="night">Bowl & Scan</button>
     <button class="tab" data-view="history">History</button>
     <button class="tab" data-view="backup">Backup</button>
     <button class="tab" data-view="cloud">Cloud Sync</button>
@@ -110,11 +110,16 @@
       <div class="card">
         <div class="section-title wrap">
           <div>
-            <div class="eyebrow">LEAGUE NIGHT</div>
+            <div id="nightEyebrow" class="eyebrow">LEAGUE NIGHT</div>
             <h2 id="nightSelection">Choose a league and team</h2>
           </div>
-          <label class="date-label">Date<input type="date" id="nightDate" /></label>
+          <label class="date-label"><span id="nightDateLabel">League night date</span><input type="date" id="nightDate" /></label>
         </div>
+        <div class="selector-row">
+          <label>Session type<select id="sessionType"><option value="league">League night</option><option value="practice">Practice</option></select></label>
+          <label id="practiceBowlerLabel" class="hidden">Practicing bowler<select id="practiceBowler"></select></label>
+        </div>
+        <p id="practiceHelp" class="muted hidden">Scan 1–3 games for the selected bowler and choose the practice date. If other people appear in the photo, assign your bowler’s row and skip the others. Leave unplayed games blank. Practice is saved separately from league scores and handicaps.</p>
         <div class="selector-row">
           <label>Season<select id="nightSeasonSelect"></select></label>
           <label>League<select id="nightLeagueSelect"></select></label>
@@ -130,7 +135,7 @@
           </div>
           <span class="badge beta">Auto Scan</span>
         </div>
-        <label>Scoreboard style<select id="ocrMode"><option value="digital">Digital grid — turquoise, blue or pink</option><option value="standard">Other display — standard OCR</option></select></label><label>Game shown in this photo<select id="ocrGame"><option value="1">Game 1</option><option value="2">Game 2</option><option value="3">Game 3</option></select></label><p class="muted small">Choose up to three photos. Assign a different game number to each photo. Include only your team, its bowler names, all 10 frames, and the displayed totals.</p>
+        <label>Scoreboard style<select id="ocrMode"><option value="digital">Digital grid — turquoise, blue or pink</option><option value="standard">Other display — standard OCR</option></select></label><label>Game shown in this photo<select id="ocrGame"><option value="1">Game 1</option><option value="2">Game 2</option><option value="3">Game 3</option></select></label><p class="muted small">Choose up to three photos. Assign a different game number to each photo. Include the full grid, all 10 frames, and the displayed totals. Confirm which row belongs to each bowler after scanning.</p>
         <input id="scoreboardImage" type="file" accept="image/*" aria-label="Choose up to three scoreboard photos" multiple />
         <div id="scanFileList" class="scan-file-list"></div>
         <div id="imagePreviewWrap" class="hidden"><img id="imagePreview" alt="Scoreboard preview" /></div>
@@ -178,6 +183,12 @@
           </div>
         </div>
         <div id="historyList"></div>
+      </div>
+      <div class="card">
+        <h2>Practice History</h2><p class="muted small">Practice for the selected season, league and team. These games do not change league statistics.</p>
+        <label>Bowler<select id="practiceHistoryBowler"></select></label>
+        <p id="practiceStats" class="practice-summary" aria-live="polite"></p>
+        <div id="practiceHistoryList"></div>
       </div>
     </section>
 
@@ -252,8 +263,9 @@
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script src="vendor/jspdf.umd.min.js"></script>
   <script src="pdf-header.js?v=20261003-leopard2"></script>
-  <script src="app.js?v=20261015-features1"></script>
+  <script src="app.js?v=20261018-practice1"></script>
   <script type="module" src="cloud-sync.js?v=20261002-cloud1"></script>
 </body>
 </html>
+
 
