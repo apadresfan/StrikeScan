@@ -7,7 +7,7 @@
   <title>StrikeScan · League Night</title>
   <link rel="icon" type="image/svg+xml" sizes="any" href="ball-pin.svg?v=20261002-icon1" />
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="styles.css?v=20261018-practice1" />
+  <link rel="stylesheet" href="styles.css?v=20261020-rowcount1" />
 </head>
 <body>
   <header class="topbar graphic-topbar">
@@ -136,6 +136,8 @@
           <span class="badge beta">Auto Scan</span>
         </div>
         <label>Scoreboard style<select id="ocrMode"><option value="digital">Digital grid — turquoise, blue or pink</option><option value="standard">Other display — standard OCR</option></select></label><label>Game shown in this photo<select id="ocrGame"><option value="1">Game 1</option><option value="2">Game 2</option><option value="3">Game 3</option></select></label><p class="muted small">Choose up to three photos. Assign a different game number to each photo. Include the full grid, all 10 frames, and the displayed totals. Confirm which row belongs to each bowler after scanning.</p>
+        <label>Bowlers on the scoreboard<select id="scoreboardRowCount"><option value="0">Detect automatically</option><option value="1">1 bowler</option><option value="2">2 bowlers</option><option value="3">3 bowlers</option><option value="4">4 bowlers</option><option value="5">5 bowlers</option><option value="6">6 bowlers</option></select></label>
+        <p class="muted small">Count everyone pictured, not just the bowler you want to save. Select the count if automatic detection misses rows; the reader will retry instead of accepting an incomplete grid. Use photos with the same row count in a batch, or scan them separately.</p>
         <input id="scoreboardImage" type="file" accept="image/*" aria-label="Choose up to three scoreboard photos" multiple />
         <div id="scanFileList" class="scan-file-list"></div>
         <div id="imagePreviewWrap" class="hidden"><img id="imagePreview" alt="Scoreboard preview" /></div>
@@ -263,9 +265,10 @@
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script src="vendor/jspdf.umd.min.js"></script>
   <script src="pdf-header.js?v=20261003-leopard2"></script>
-  <script src="app.js?v=20261018-practice1"></script>
+  <script src="app.js?v=20261020-rowcount1"></script>
   <script type="module" src="cloud-sync.js?v=20261002-cloud1"></script>
 </body>
 </html>
+
 
 
