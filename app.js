@@ -415,7 +415,27 @@ function readDisplayedGridTotal(data,w,h,left,right,top,bottom){
  candidates.sort((a,b)=>a.error-b.error);const best=candidates[0];if(!best||best.error>.24)return {displayedTotal:null,totalUncertain:true};
  return {displayedTotal:Number(best.mark),totalUncertain:best.error>.17||best.margin<.02||candidates.some(c=>c.mark!==best.mark)};
 }
-function readDigitalGrid(data,w,h,adjusted=false){
+function digitalRowBands(ys,header,columns,lit,w,h){
+ const base=ys[header+2]-ys[header+1],bands=[];
+ let top=ys[header+1];
+ // Check several frame dividers, not just the name-column border. A faded
+ // border or a bright streak inside one row must not hide later bowlers.
+ const supported=(a,b)=>columns.slice(1,-1).filter(x=>{
+  let hits=0;for(const p of [.2,.35,.5,.65,.8]){
+   const y=Math.round(a+(b-a)*p);if(y<0||y>=h)continue;
+   if([-3,-2,-1,0,1,2,3].some(dx=>{const px=Math.round(x)+dx;return px>=0&&px<w&&lit(px,y)}))hits++;
+  }return hits>=3;
+ }).length>=8;
+ for(let i=0;i<12;i++){
+  const expected=top+base;if(expected>h-2)break;
+  const candidates=ys.filter(y=>y-top>=base*.7&&y-top<=base*1.3);
+  const bottom=candidates.sort((a,b)=>Math.abs(a-expected)-Math.abs(b-expected))[0]??expected;
+  if(!supported(top,bottom))break;
+  bands.push({top,bottom,inferred:!ys.some(y=>Math.abs(y-bottom)<1)});top=bottom;
+ }
+ return bands;
+}
+function readDigitalGrid(data,w,h,adjusted=false,expectedRows=0){
  let red=0,green=0;for(let i=0;i<data.length;i+=400){red+=data[i];green+=data[i+1];}const pink=red>green*1.15;
  const lit=(x,y)=>{const i=(y*w+x)*4;return adjusted?((data[i+1]>170&&data[i+2]>150)||(data[i]>170&&data[i+2]>170)):(data[i+1]>110&&data[i+2]>110&&data[i]<data[i+1]*.85)};
  const glyphLit=(x,y)=>{if(!pink)return lit(x,y);const i=(y*w+x)*4;return data[i+1]>85&&data[i+2]>150&&data[i]<data[i+2]*.9};
@@ -431,14 +451,11 @@ function readDigitalGrid(data,w,h,adjusted=false){
   const xs=groups(hits);
   if(xs.length===13||(xs.length===11&&xs[0]>w*.05&&xs[0]<w*.2&&xs.at(-1)>w*.75)){columns=xs.length===11?[0,...xs,w-1]:xs;header=i;break;}
  }
- if(!columns&&!adjusted)return readDigitalGrid(straightenDigitalGrid(data,w,h),w,h,true);
+ if(!columns&&!adjusted)return readDigitalGrid(straightenDigitalGrid(data,w,h),w,h,true,expectedRows);
  if(!columns)throw new Error('Grid not found. Photograph the full digital scoreboard grid straight on with all frame columns visible. Try standard OCR for other displays.');
  const frameEdges=columns.slice(1,-1),rows=[];
- for(let r=header+1;r<ys.length-1;r++){
-  const top=ys[r],bottom=ys[r+1],height=bottom-top;
-  if(height<(ys[header+2]-ys[header+1])*.7)break;
-  const middle=Math.round((top+bottom)/2),left=Math.round(columns[1]);
-  if(![-2,-1,0,1,2].some(dx=>lit(left+dx,middle)))break;
+ for(const {top,bottom,inferred} of digitalRowBands(ys,header,columns,lit,w,h)){
+  const height=bottom-top;
   const frames=[],uncertainFrames=[],frameCrops=[];
   for(let f=0;f<10;f++){
    const scale=w/1338,x0=Math.round(frameEdges[f])+Math.max(3,Math.round(5*scale)),x1=Math.round(frameEdges[f+1])-Math.max(3,Math.round(4*scale));
@@ -462,11 +479,12 @@ function readDigitalGrid(data,w,h,adjusted=false){
     const candidate=first&&second?first+second:'';
     if(candidate&&parseFrame(candidate,f)!==null)mark=candidate;
    }
-   frames.push(mark);uncertainFrames.push(!mark||lowConfidence);frameCrops.push({x:Math.max(0,(frameEdges[f]-5)/w),y:Math.max(0,(top-6)/h),w:Math.min(1,(frameEdges[f+1]-frameEdges[f]+10)/w),h:Math.min(1,(height*.55+12)/h)});
+   frames.push(mark);uncertainFrames.push(inferred||!mark||lowConfidence);frameCrops.push({x:Math.max(0,(frameEdges[f]-5)/w),y:Math.max(0,(top-6)/h),w:Math.min(1,(frameEdges[f+1]-frameEdges[f]+10)/w),h:Math.min(1,(height*.55+12)/h)});
   }
   rows.push({bowlerId:'',name:'Scoreboard row '+(rows.length+1),line:'Check bowler assignment and highlighted frames on the score sheet.',frames,uncertain:uncertainFrames,frameCrops,...readDisplayedGridTotal(data,w,h,columns.at(-2),columns.at(-1),top,bottom)});
  }
  if(!rows.length)throw new Error('No bowler rows found in this grid.');
+ if(expectedRows&&rows.length!==expectedRows)throw new Error('Found '+rows.length+' bowler rows, but '+expectedRows+' were selected. Include all rows and the bottom border in the photo.');
  return rows;
 }
 function renderOcrReview(rows,grid){
@@ -729,7 +747,7 @@ let scanFiles=[], scanResults=new Map(), scanSources=new Map(), scanUndo=null, s
 const cloneData=value=>JSON.parse(JSON.stringify(value));
 function assertScanActive(token){if(token&&(token.cancelled||token.store!==activeStoreKey||token.teamId!==currentTeam()?.id||token.draft!==nightDraft))throw new Error('SCAN_CANCELLED')}
 function cancelScan(){if(!scanSession)return;scanSession.cancelled=true;scanSession.cancelPending?.();scanSession.gridWorker?.terminate();scanSession.textWorker?.terminate().catch(()=>{});$('#ocrStatus').textContent='Cancelling scan…'}
-function setScanBusy(busy){for(const id of ['runOcrBtn','scoreboardImage','ocrMode','ocrGame','saveNightBtn','clearNightBtn','sessionType','practiceBowler'])$('#'+id).disabled=busy;$$('[data-scan-file]').forEach(el=>el.disabled=busy);$('#cancelScanBtn').classList.toggle('hidden',!busy);$('#ocrProgress').classList.toggle('hidden',!busy);$('#undoScanBtn').disabled=busy||!scanUndo||scanUndo.store!==activeStoreKey||scanUndo.teamId!==currentTeam()?.id}
+function setScanBusy(busy){for(const id of ['runOcrBtn','scoreboardImage','ocrMode','ocrGame','saveNightBtn','clearNightBtn','sessionType','practiceBowler','scoreboardRowCount'])$('#'+id).disabled=busy;$$('[data-scan-file]').forEach(el=>el.disabled=busy);$('#cancelScanBtn').classList.toggle('hidden',!busy);$('#ocrProgress').classList.toggle('hidden',!busy);$('#undoScanBtn').disabled=busy||!scanUndo||scanUndo.store!==activeStoreKey||scanUndo.teamId!==currentTeam()?.id}
 function selectScanFiles(){
  if(scanSession)return;
  const files=[...$('#scoreboardImage').files];if(files.length>3){$('#scoreboardImage').value='';scanFiles=[];$('#scanFileList').innerHTML='';toast('Choose up to three photos at a time.');return}
@@ -753,12 +771,12 @@ async function openFrameReview(game,bowlerId,frame){
  try{const img=new Image();await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=reject;img.src=source.url});if(frameReview?.draft!==nightDraft||frameReview?.frame!==frame||frameReview?.bowlerId!==bowlerId)return;const canvas=$('#frameReviewPhoto'),ctx=canvas.getContext('2d');const crop=bounds||{x:0,y:0,w:1,h:1};const x=Math.max(0,crop.x),y=Math.max(0,crop.y),w=Math.min(crop.w,1-x),h=Math.min(crop.h,1-y);canvas.width=800;canvas.height=Math.min(600,Math.max(180,Math.round(800*h*img.naturalHeight/(w*img.naturalWidth))));ctx.drawImage(img,x*img.naturalWidth,y*img.naturalHeight,w*img.naturalWidth,h*img.naturalHeight,0,0,canvas.width,canvas.height);canvas.classList.remove('hidden');if(!bounds)$('#frameReviewNoPhoto').textContent='Standard OCR: full photo shown. Locate the selected frame.';}catch{$('#frameReviewNoPhoto').textContent='The scan photo could not be opened.';}
 }
 function saveFrameReview(){if(!frameReview||frameReview.draft!==nightDraft)return;const {game,bowlerId,frame}=frameReview,mark=normalizeFrame($('#frameReviewInput').value);if(parseFrame(mark,frame)===null){$('#frameReviewStatus').textContent='Enter a valid frame mark, such as 9/, 8-, or X. The tenth frame may need a bonus roll.';return}const b=nightDraft.games.find(g=>g.game===game)?.bowlers.find(b=>b.bowlerId===bowlerId);if(!b)return;b.totalOnly=false;delete b.manualTotal;b.frames[frame]=mark;b.ocrUncertain??=Array(10).fill(false);b.ocrUncertain[frame]=false;updateOcrFromScoreSheet(b,game,frame);$('#frameReviewDialog').close();frameReview=null;renderScoreSheet()}
-function gridWorkerSource(){return 'const TOTAL_FONT='+JSON.stringify(TOTAL_FONT)+';const GRID_FONT='+JSON.stringify(GRID_FONT)+';const SPLIT_FONT='+JSON.stringify(SPLIT_FONT)+';'+[normalizeFrame,parseFrame,bowlingScore,straightenDigitalGrid,highlightedRollFeatures,readSplitFirstRoll,readSplitSecondRoll,distinguishFiveAndSix,readFrameAtThreshold,readDisplayedGridTotal,readDigitalGrid].map(fn=>fn.toString()).join('\n')+'\nonmessage=e=>{try{postMessage({rows:readDigitalGrid(new Uint8ClampedArray(e.data.data),e.data.w,e.data.h)})}catch(error){postMessage({error:error.message})}}';}
-async function recognizeGridAsync(data,w,h,token){assertScanActive(token);if(typeof Worker==='undefined')return readDigitalGrid(data,w,h);if(!token.gridWorker){const url=URL.createObjectURL(new Blob([gridWorkerSource()],{type:'text/javascript'}));token.gridWorker=new Worker(url);URL.revokeObjectURL(url)}return new Promise((resolve,reject)=>{token.cancelPending=()=>reject(new Error('SCAN_CANCELLED'));token.gridWorker.onmessage=e=>{token.cancelPending=null;e.data.error?reject(new Error(e.data.error)):resolve(e.data.rows)};token.gridWorker.onerror=()=>{token.cancelPending=null;reject(new Error('The scan worker could not start. Reload the page and retry.'))};const copy=new Uint8ClampedArray(data);token.gridWorker.postMessage({data:copy.buffer,w,h},[copy.buffer])})}
+function gridWorkerSource(){return 'const TOTAL_FONT='+JSON.stringify(TOTAL_FONT)+';const GRID_FONT='+JSON.stringify(GRID_FONT)+';const SPLIT_FONT='+JSON.stringify(SPLIT_FONT)+';'+[normalizeFrame,parseFrame,bowlingScore,straightenDigitalGrid,highlightedRollFeatures,readSplitFirstRoll,readSplitSecondRoll,distinguishFiveAndSix,readFrameAtThreshold,readDisplayedGridTotal,digitalRowBands,readDigitalGrid].map(fn=>fn.toString()).join('\n')+'\nonmessage=e=>{try{postMessage({rows:readDigitalGrid(new Uint8ClampedArray(e.data.data),e.data.w,e.data.h,false,e.data.expectedRows)})}catch(error){postMessage({error:error.message})}}';}
+async function recognizeGridAsync(data,w,h,token){assertScanActive(token);if(typeof Worker==='undefined')return readDigitalGrid(data,w,h,false,token.expectedRows);if(!token.gridWorker){const url=URL.createObjectURL(new Blob([gridWorkerSource()],{type:'text/javascript'}));token.gridWorker=new Worker(url);URL.revokeObjectURL(url)}return new Promise((resolve,reject)=>{token.cancelPending=()=>reject(new Error('SCAN_CANCELLED'));token.gridWorker.onmessage=e=>{token.cancelPending=null;e.data.error?reject(new Error(e.data.error)):resolve(e.data.rows)};token.gridWorker.onerror=()=>{token.cancelPending=null;reject(new Error('The scan worker could not start. Reload the page and retry.'))};const copy=new Uint8ClampedArray(data);token.gridWorker.postMessage({data:copy.buffer,w,h,expectedRows:token.expectedRows},[copy.buffer])})}
 async function runScanBatch(){
  if(scanSession)return;const team=currentTeam();if(!scanFiles.length)return toast('Choose one to three scoreboard photos.');if(!team?.bowlers.length)return toast('Choose a team and add its bowlers first.');if(new Set(scanFiles.map(i=>i.game)).size!==scanFiles.length)return toast('Assign a different game number to each photo.');if($('#ocrMode').value==='standard'&&!window.Tesseract)return toast('The OCR component has not loaded. Connect and reload the page.');ensureDraft();
  const targets=new Set(scanFiles.map(i=>i.game));if(nightDraft.games.some(g=>targets.has(g.game)&&g.bowlers.some(b=>b.absent||b.totalOnly||b.frames.some(Boolean)))&&!confirm('Replace scanned bowlers in the selected games? You can use Undo Last Scan afterwards.'))return;
- scanUndo={store:activeStoreKey,teamId:team.id,draft:cloneData(nightDraft)};const token={store:activeStoreKey,teamId:team.id,draft:nightDraft,cancelled:false};scanSession=token;setScanBusy(true);let completed=0;
+ scanUndo={store:activeStoreKey,teamId:team.id,draft:cloneData(nightDraft)};const token={store:activeStoreKey,teamId:team.id,draft:nightDraft,expectedRows:+$('#scoreboardRowCount').value||0,cancelled:false};scanSession=token;setScanBusy(true);let completed=0;
  try{for(const item of [...scanFiles]){assertScanActive(token);$('#ocrStatus').textContent='Reading Game '+item.game+'…';const grid=$('#ocrMode').value==='digital';let result;
    if(grid)result=await findDigitalGridAutomatically(item.file,token);
    else{if(!token.textWorker)token.textWorker=await Tesseract.createWorker('eng',1,{logger:m=>{if(scanSession===token&&!token.cancelled)$('#ocrStatus').textContent='Game '+item.game+' · '+m.status+' '+Math.round((m.progress||0)*100)+'%'}});assertScanActive(token);result=await readStandardScoresAutomatically(token.textWorker,item.file,token);}
@@ -798,5 +816,6 @@ renderAll();
 
 
 let progressResizeTimer;window.addEventListener('resize',()=>{clearTimeout(progressResizeTimer);progressResizeTimer=setTimeout(renderBowlerProgress,120)});
+
 
 
