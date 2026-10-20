@@ -490,8 +490,8 @@ function readDigitalGrid(data,w,h,adjusted=false,expectedRows=0){
 function renderOcrReview(rows,grid){
  rows.forEach((r,i)=>{r.frames=Array.from({length:10},(_,i)=>r.frames?.[i]||'');r.uncertain=Array.from({length:10},(_,f)=>r.uncertain?.[f]??(!grid||parseFrame(r.frames[f],f)===null));const team=currentTeam(),order=isPractice()?null:team.ocrOrder;const remembered=order?.length===rows.length&&new Set(order).size===order.length&&order.every(id=>team.bowlers.some(b=>b.id===id));if(isPractice()&&!r.bowlerId&&rows.length===1)r.bowlerId=practiceBowler()?.id||'';if(grid&&!r.bowlerId&&!isPractice()){if(remembered)r.bowlerId=order[i];else if(rows.length===team.bowlers.length)r.bowlerId=team.bowlers[i].id;}});
  $('#ocrDetected').innerHTML=rows.map((r,i)=>'<div class="game-block"><strong>'+esc(r.name)+'</strong>'+
- '<label>Bowler<select data-ocr-row="'+i+'"><option value="">Choose bowler for this row</option><option value="__skip__">Skip this row</option>'+sessionRoster().map(b=>'<option value="'+esc(b.id)+'" '+(r.bowlerId===b.id?'selected':'')+'>'+esc(b.name)+'</option>').join('')+'</select></label>'+
- '<label class="small"><input type="checkbox" data-ocr-absent="'+i+'" '+(r.absent?'checked':'')+'> Absent (ABS) — no played score</label><p class="muted small">'+esc(r.line)+'</p><div class="row wrap">'+r.frames.map((f,fi)=>'<label>Frame '+(fi+1)+'<input data-ocr-frame="'+i+':'+fi+'" value="'+esc(f)+'" maxlength="4" aria-label="'+esc(r.name)+', frame '+(fi+1)+'" style="width:65px"></label>').join('')+'<p class="small" data-ocr-feedback="'+i+'" role="status"></p></div>').join('');
+ '<label>Bowler<select data-ocr-row="'+i+'"><option value="">Choose bowler for this row</option><option value="__skip__" '+(r.bowlerId==='__skip__'?'selected':'')+'>Skip this bowler</option>'+sessionRoster().map(b=>'<option value="'+esc(b.id)+'" '+(r.bowlerId===b.id?'selected':'')+'>'+esc(b.name)+'</option>').join('')+'</select></label>'+
+ '<div data-ocr-row-details="'+i+'"><label class="small"><input type="checkbox" data-ocr-absent="'+i+'" '+(r.absent?'checked':'')+'> Absent (ABS) — no played score</label><p class="muted small">'+esc(r.line)+'</p><div class="row wrap">'+r.frames.map((f,fi)=>'<label>Frame '+(fi+1)+'<input data-ocr-frame="'+i+':'+fi+'" value="'+esc(f)+'" maxlength="4" aria-label="'+esc(r.name)+', frame '+(fi+1)+'" style="width:65px"></label>').join('')+'<p class="small" data-ocr-feedback="'+i+'" role="status"></p></div></div></div>').join('');
  $$('[data-ocr-absent]').forEach(el=>el.onchange=()=>{ocrResult.rows[+el.dataset.ocrAbsent].absent=el.checked;updateOcrReview()});
  $$('[data-ocr-row]').forEach(el=>el.onchange=()=>{ocrResult.rows[+el.dataset.ocrRow].bowlerId=el.value;updateOcrReview()});
  $$('[data-ocr-frame]').forEach(el=>el.oninput=()=>{const [r,f]=el.dataset.ocrFrame.split(':').map(Number);el.value=normalizeFrame(el.value);ocrResult.rows[r].frames[f]=el.value;updateOcrReview()});
@@ -511,6 +511,7 @@ function ocrReviewIssues(){
 }
 function updateOcrReview(){
  const rows=ocrResult?.rows||[],issues=ocrReviewIssues();
+ $$('[data-ocr-row-details]').forEach(el=>el.classList.toggle('hidden',rows[+el.dataset.ocrRowDetails]?.bowlerId==='__skip__'));
  $$('[data-ocr-frame]').forEach(el=>{const row=+el.dataset.ocrFrame.split(':')[0];el.disabled=!!rows[row]?.absent||rows[row]?.bowlerId==='__skip__'});
  rows.forEach((r,i)=>{const el=$('[data-ocr-feedback="'+i+'"]');if(el)el.textContent=r.bowlerId==='__skip__'?'This row will be skipped.':issues.filter(x=>x.row===i).map(x=>x.message).join(' ')||'Added to score sheet. Review highlighted frames below.'});
  syncOcrToScoreSheet();
@@ -816,6 +817,7 @@ renderAll();
 
 
 let progressResizeTimer;window.addEventListener('resize',()=>{clearTimeout(progressResizeTimer);progressResizeTimer=setTimeout(renderBowlerProgress,120)});
+
 
 
 
