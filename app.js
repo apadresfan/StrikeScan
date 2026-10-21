@@ -85,6 +85,9 @@ function updateTotals(){if(!nightDraft)return;let valid=0,total=0;for(const g of
  }if(isPractice()){$('#nightValidation').textContent='Save 1–3 practice games. Leave unused games blank. Practice scores stay separate from league statistics.';return}$('#nightValidation').textContent=valid+' of '+total+' games complete, total only, or ABS. Total-only games exclude frame statistics.'}
 function saveNight(){if(isPractice())return savePractice();const t=currentTeam();if(!t||!nightDraft)return toast('Select a team');const mismatches=nightDraft.games.flatMap(g=>g.bowlers.filter(verificationMismatch).map(b=>b.name+' G'+g.game));if(mismatches.length&&!confirm('Calculated scores differ from the scanned scoreboard total for '+mismatches.join(', ')+'. Save the entered frames anyway?'))return;const entries=[];for(const g of nightDraft.games){for(const b of g.bowlers){const score=entryScore(b);if(!b.absent&&score==null)return toast(`Finish or correct Game ${g.game} for ${b.name}`);entries.push(savedEntry(b,g.game))}}
   t.nights.push({id:uid(),date:$('#nightDate').value||localToday(),createdAt:new Date().toISOString(),entries});t.nights.sort((a,b)=>a.date.localeCompare(b.date));nightDraft=newSessionDraft(t);clearScanReview();persist();toast(bestNightNotice(t,t.nights.find(n=>n.entries===entries))||'League night saved')}
+function statsArePractice(){return state.selected.statsSource==='practice'}
+function statsSourceLabel(){return statsArePractice()?'Practice Sessions':'League Nights'}
+function selectedStatsTeam(){const team=currentTeam();return team&&statsArePractice()?{...team,nights:team.practiceSessions||[]}:team}
 function dashboardBowlers(t){
  const byId=new Map((t?.bowlers||[]).map(b=>[b.id,{id:b.id,name:b.name}]));
  for(const n of t?.nights||[])for(const e of n.entries)if(!byId.has(e.bowlerId))byId.set(e.bowlerId,{id:e.bowlerId,name:e.name});
@@ -109,7 +112,7 @@ function statsForTeam(t,bowlerId=null){
  gameAverages:[1,2,3].map(game=>average(entries.filter(e=>e.game===game).map(e=>e.score)))};
 }
 function renderBowlerProgress(){
- const root=$('#bowlerProgress'),team=currentTeam(),id=state.selected.bowlerId;
+ const root=$('#bowlerProgress'),team=selectedStatsTeam(),id=state.selected.bowlerId;
  const bowler=dashboardBowlers(team).find(b=>b.id===id);
  if(!bowler){root.innerHTML='<div class="empty">Choose a bowler above to see their progress.</div>';return}
  const games=[...(team?.nights||[])].sort((a,b)=>a.date.localeCompare(b.date)||String(a.createdAt||'').localeCompare(String(b.createdAt||''))).flatMap(n=>n.entries.filter(e=>e.bowlerId===id&&Number.isFinite(e.score)).sort((a,b)=>a.game-b.game).map(e=>({date:n.date,game:e.game,score:e.score})));
@@ -120,7 +123,7 @@ function renderBowlerProgress(){
  const dateLabel=d=>new Date(d+'T12:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric'});
  const ticks=[0,100,200,300].map(s=>'<line class="progress-grid" x1="'+left+'" x2="'+right+'" y1="'+y(s)+'" y2="'+y(s)+'"/><text x="'+(left-8)+'" y="'+(y(s)+4)+'" text-anchor="end">'+s+'</text>').join('');
  const labels=[...new Set([0,Math.floor((games.length-1)/2),games.length-1])].map(i=>'<text x="'+x(i)+'" y="234" text-anchor="'+(i===0?'start':i===games.length-1?'end':'middle')+'">'+esc(dateLabel(games[i].date))+'</text>').join('');
- root.innerHTML='<p class="muted small">'+esc(bowler.name)+' · '+games.length+' games · Selected season, league and team</p><div class="progress-legend"><span><i class="progress-score-key"></i>Game score</span><span><i class="progress-average-key"></i>Season average: '+avg.toFixed(1)+'</span></div><svg class="progress-chart" viewBox="0 0 '+w+' '+h+'" role="group" aria-label="'+esc(bowler.name)+' game scores in date order, from 0 to 300. Season average '+avg.toFixed(1)+'">'+ticks+'<line class="progress-average" x1="'+left+'" x2="'+right+'" y1="'+y(avg)+'" y2="'+y(avg)+'"/><polyline class="progress-line" points="'+games.map((g,i)=>x(i)+','+y(g.score)).join(' ')+'"/>'+games.map((g,i)=>'<g class="progress-point" role="button" tabindex="0" data-progress-game="'+i+'" aria-label="'+esc(formatDate(g.date))+', game '+g.game+', score '+g.score+'"><circle class="progress-hit" cx="'+x(i)+'" cy="'+y(g.score)+'" r="14"/><circle class="progress-dot" cx="'+x(i)+'" cy="'+y(g.score)+'" r="4"/></g>').join('')+labels+'<text x="'+((left+right)/2)+'" y="256" text-anchor="middle">Games in date order</text></svg><p id="progressDetail" class="progress-detail" aria-live="polite"></p><details class="progress-data"><summary>View all game scores</summary><table><thead><tr><th>Date</th><th>Game</th><th>Score</th></tr></thead><tbody>'+games.map(g=>'<tr><td>'+esc(formatDate(g.date))+'</td><td>'+g.game+'</td><td>'+g.score+'</td></tr>').join('')+'</tbody></table></details>';
+ root.innerHTML='<p class="muted small">'+esc(bowler.name)+' · '+games.length+' games · Selected season, league and team</p><div class="progress-legend"><span><i class="progress-score-key"></i>Game score</span><span><i class="progress-average-key"></i>Selected average: '+avg.toFixed(1)+'</span></div><svg class="progress-chart" viewBox="0 0 '+w+' '+h+'" role="group" aria-label="'+esc(bowler.name)+' game scores in date order, from 0 to 300. Selected average '+avg.toFixed(1)+'">'+ticks+'<line class="progress-average" x1="'+left+'" x2="'+right+'" y1="'+y(avg)+'" y2="'+y(avg)+'"/><polyline class="progress-line" points="'+games.map((g,i)=>x(i)+','+y(g.score)).join(' ')+'"/>'+games.map((g,i)=>'<g class="progress-point" role="button" tabindex="0" data-progress-game="'+i+'" aria-label="'+esc(formatDate(g.date))+', game '+g.game+', score '+g.score+'"><circle class="progress-hit" cx="'+x(i)+'" cy="'+y(g.score)+'" r="14"/><circle class="progress-dot" cx="'+x(i)+'" cy="'+y(g.score)+'" r="4"/></g>').join('')+labels+'<text x="'+((left+right)/2)+'" y="256" text-anchor="middle">Games in date order</text></svg><p id="progressDetail" class="progress-detail" aria-live="polite"></p><details class="progress-data"><summary>View all game scores</summary><table><thead><tr><th>Date</th><th>Game</th><th>Score</th></tr></thead><tbody>'+games.map(g=>'<tr><td>'+esc(formatDate(g.date))+'</td><td>'+g.game+'</td><td>'+g.score+'</td></tr>').join('')+'</tbody></table></details>';
  const select=i=>{const g=games[i];$('#progressDetail').textContent=formatDate(g.date)+' · Game '+g.game+' · Score '+g.score+' · '+(g.score>=avg?'+':'')+(g.score-avg).toFixed(1)+' vs. average';root.querySelectorAll('[data-progress-game]').forEach(el=>el.setAttribute('aria-pressed',String(+el.dataset.progressGame===i)))};
  root.querySelectorAll('[data-progress-game]').forEach(el=>{el.onclick=()=>select(+el.dataset.progressGame);el.onfocus=()=>select(+el.dataset.progressGame);el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();select(+el.dataset.progressGame)}}});select(games.length-1);
 }
@@ -142,10 +145,10 @@ function personalBestData(team,bowlerId){
  return {highGame,highSeries,achievements};
 }
 function renderPersonalBests(){
- const root=$('#personalBests'),team=currentTeam(),bowler=dashboardBowlers(team).find(b=>b.id===state.selected.bowlerId);
+ const root=$('#personalBests'),team=selectedStatsTeam(),bowler=dashboardBowlers(team).find(b=>b.id===state.selected.bowlerId);
  if(!bowler){root.innerHTML='<div class="empty">Choose a bowler above to see their personal bests.</div>';return}
  const records=personalBestData(team,bowler.id);
- root.innerHTML='<p class="muted small">'+esc(bowler.name)+' · Selected season, league and team</p><div class="best-grid">'+[['High game',records.highGame],['High series',records.highSeries]].map(([label,record])=>'<div class="best-trophy"><span class="best-label">🏆 '+label+'</span><strong>'+ (record?.score??'—')+'</strong><span>'+(record?esc(formatDate(record.date))+(record.game?' · Game '+record.game:' · 3 games'):'No '+(label==='High game'?'saved games':'complete three-game series')+' yet')+'</span></div>').join('')+'</div><p class="muted small">New records are highlighted in History. Ties keep the original record date.</p>';
+ root.innerHTML='<p class="muted small">'+esc(bowler.name)+' · '+statsSourceLabel()+' · Selected season, league and team</p><div class="best-grid">'+[['High game',records.highGame],['High series',records.highSeries]].map(([label,record])=>'<div class="best-trophy"><span class="best-label">🏆 '+label+'</span><strong>'+ (record?.score??'—')+'</strong><span>'+(record?esc(formatDate(record.date))+(record.game?' · Game '+record.game:' · 3 games'):'No '+(label==='High game'?'saved games':'complete three-game series')+' yet')+'</span></div>').join('')+'</div><p class="muted small">Three-game records require three completed games in the same session. Ties keep the original record date.</p>';
 }
 function bestNightNotice(team,night){
  const previous={...team,nights:team.nights.filter(n=>n.id!==night.id)},notices=[];
@@ -159,23 +162,24 @@ function bestNightNotice(team,night){
 }
 
 function renderDashboard(){
- const s=currentSeason(),l=currentLeague(),t=currentTeam(),bowlers=dashboardBowlers(t);
+ const s=currentSeason(),l=currentLeague(),t=selectedStatsTeam(),bowlers=dashboardBowlers(t);
+ $('#statsSource').value=statsArePractice()?'practice':'league';
  if(!bowlers.some(b=>b.id===state.selected.bowlerId))state.selected.bowlerId=null;
  const id=state.selected.bowlerId,bowler=bowlers.find(b=>b.id===id);
  bindSelect($('#dashboardBowlerSelect'),bowlers,id,v=>{state.selected.bowlerId=v;persist()},'All team bowlers');
  $('#dashboardBowlerSelect').disabled=!bowlers.length;
  $('#dashTitle').textContent=bowler?bowler.name+' — '+t.name:t?t.name+' — '+l.name:'No team selected';
- $('#dashSubtitle').textContent=s?s.name+' season'+(bowler?' · '+l.name:'')+' · '+(bowler?'Individual bowler statistics':'All team bowlers'):'Create a season, league, and team to get started.';
+ $('#dashSubtitle').textContent=s?s.name+' season'+(bowler?' · '+l.name:'')+' · '+statsSourceLabel()+' · '+(bowler?'Individual bowler statistics':'All team bowlers'):'Create a season, league, and team to get started.';
  $('#downloadBowlerPdfBtn').disabled=!bowler||!statsForTeam(t,id).games;
  $('#shareBowlerPdfBtn').disabled=$('#downloadBowlerPdfBtn').disabled;
  const st=statsForTeam(t,id),decimal=value=>value===null?'—':value.toFixed(1);
  const cards=items=>items.map(([label,value])=>'<div class="stat"><div class="value">'+value+'</div><div class="label">'+label+'</div></div>').join('');
  $('#statCards').innerHTML=cards([['Games',st.games],['Average',decimal(st.avg)],['High Game',st.high??'—'],['High Series',st.highSeries??'—']]);
  $('#bowlerStatCards').innerHTML=cards([['Average Series',decimal(st.avgSeries)],['Strikes',st.strikes],['Spares',st.spares],['Open Frames',st.opens]]);
- $('#gameAverageSummary').textContent=st.games?st.gameAverages.map((avg,i)=>'Game '+(i+1)+' average: '+decimal(avg)).join(' · ')+(st.frames?' · Strike rate: '+(100*st.strikes/st.frames).toFixed(1)+'% · Spare conversion: '+(st.frames>st.strikes?(100*st.spares/(st.frames-st.strikes)).toFixed(1)+'%':'—'):''):'Save a league night to see statistics.';
+ $('#gameAverageSummary').textContent=st.games?st.gameAverages.map((avg,i)=>'Game '+(i+1)+' average: '+decimal(avg)).join(' · ')+(st.frames?' · Strike rate: '+(100*st.strikes/st.frames).toFixed(1)+'% · Spare conversion: '+(st.frames>st.strikes?(100*st.spares/(st.frames-st.strikes)).toFixed(1)+'%':'—'):''):'Save '+(statsArePractice()?'practice games':'a league night')+' to see statistics.';
  renderPersonalBests();
  renderBowlerProgress();
- $('#recentNightsTitle').textContent=bowler?'Games & series history':'Recent league nights';
+ $('#recentNightsTitle').textContent=bowler?(statsArePractice()?'Practice games & series':'League games & series'):(statsArePractice()?'Recent practice sessions':'Recent league nights');
  const nights=[...st.nights].sort((a,b)=>b.date.localeCompare(a.date));
  if(bowler){
   $('#recentNights').innerHTML=nights.length?'<div class="history-grid"><div>Date</div><div>G1</div><div>G2</div><div>G3</div><div>Series</div>'+nights.map(n=>{
@@ -183,7 +187,7 @@ function renderDashboard(){
    return '<div>'+formatDate(n.date)+'</div>'+games.map(score=>'<div>'+(score??'—')+'</div>').join('')+'<div><strong>'+(games.every(score=>Number.isFinite(score))?games.reduce((a,b)=>a+b,0):'—')+'</strong></div>';
   }).join('')+'</div>':'<div class="empty">No saved games for this bowler in the selected season, league and team.</div>';
  }else{
-  $('#recentNights').innerHTML=nights.length?nights.slice(0,5).map(n=>'<div class="recent-item"><span>'+formatDate(n.date)+'</span><strong>'+n.entries.length+' games logged</strong></div>').join(''):'<div class="empty">No league nights saved yet.</div>';
+  $('#recentNights').innerHTML=nights.length?nights.slice(0,5).map(n=>'<div class="recent-item"><span>'+formatDate(n.date)+'</span><strong>'+n.entries.length+' games logged</strong></div>').join(''):'<div class="empty">No '+(statsArePractice()?'practice sessions':'league nights')+' saved yet.</div>';
  }
  const highs=st.nights.flatMap(n=>n.entries.filter(e=>!e.absent&&Number.isFinite(e.score)).map(e=>({...e,date:n.date}))).sort((a,b)=>b.score-a.score).slice(0,5);
  $('#highScores').innerHTML=highs.length?highs.map(e=>'<div class="recent-item"><span>'+esc(e.name)+' · '+formatDate(e.date)+' · G'+e.game+'</span><strong>'+e.score+'</strong></div>').join(''):'<div class="empty">Scores will appear here.</div>';
@@ -608,11 +612,11 @@ function updateOcrFromScoreSheet(bowler,game,frame){
  row.lastApplied=JSON.stringify(bowler);
 }
 function bowlerPdfData(){
- const team=currentTeam(),id=state.selected.bowlerId,bowler=dashboardBowlers(team).find(b=>b.id===id);
+ const team=selectedStatsTeam(),id=state.selected.bowlerId,bowler=dashboardBowlers(team).find(b=>b.id===id);
  if(!bowler)throw new Error('Choose an individual bowler on the dashboard first.');
  const stats=statsForTeam(team,id);
- if(!stats.games)throw new Error('Save a league night for this bowler before exporting.');
- return {bowler:bowler.name,season:currentSeason().name,league:currentLeague().name,team:team.name,stats,generated:new Date()};
+ if(!stats.games)throw new Error('Save '+(statsArePractice()?'practice games':'a league night')+' for this bowler before exporting.');
+ return {source:statsArePractice()?'practice':'league',sourceLabel:statsSourceLabel(),bowler:bowler.name,season:currentSeason().name,league:currentLeague().name,team:team.name,stats,generated:new Date()};
 }
 function createBowlerPdf(model,PdfClass=window.jspdf.jsPDF){
  if(!window.bowlingPdfHeader)throw new Error('The PDF header did not load. Reload the page and try again.');
@@ -641,7 +645,7 @@ function createBowlerPdf(model,PdfClass=window.jspdf.jsPDF){
  label('',10,true,[182,42,109]);doc.text('STRIKESCAN / BOWLER REPORT',M,y);y+=26;
  paragraph(model.bowler,22,true);y+=3;
  paragraph('Season: '+model.season+'   |   League: '+model.league);
- paragraph('Team: '+model.team);
+ paragraph('Team: '+model.team+'   |   '+model.sourceLabel);
  const handicapEntries=model.stats.entries.filter(e=>Number.isFinite(e.handicap));if(handicapEntries.length)paragraph('Recorded handicap: average '+(handicapEntries.reduce((sum,e)=>sum+e.score+e.handicap,0)/handicapEntries.length).toFixed(1)+' across '+handicapEntries.length+' games. Scratch scores shown in the tables.',9);
  const nights=[...model.stats.nights].sort((a,b)=>a.date.localeCompare(b.date)),st=model.stats;
  paragraph('Saved games: '+date(nights[0].date)+' to '+date(nights.at(-1).date),9);
@@ -686,12 +690,12 @@ function createBowlerPdf(model,PdfClass=window.jspdf.jsPDF){
   label('',8,false,[100,111,130]);doc.text('StrikeScan / Generated '+model.generated.toLocaleDateString(),M,769);
   doc.text('Page '+p+' of '+pageCount,M+W,769,{align:'right'});
  }
- doc.setProperties({title:clean(model.bowler)+' - Bowling Stats and Games',subject:'Bowler statistics and frame-by-frame league game details',author:'StrikeScan'});
+ doc.setProperties({title:clean(model.bowler)+' - Bowling Stats and Games',subject:model.sourceLabel+' statistics and frame-by-frame game details',author:'StrikeScan'});
  return doc;
 }
 function bowlerPdfFilename(model){
  const safe=value=>String(value).normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9_-]+/g,'-').replace(/^-|-$/g,'').slice(0,60)||'Bowler';
- return safe(model.bowler)+'-'+safe(model.season)+'-Bowling-Report.pdf';
+ return safe(model.bowler)+'-'+safe(model.season)+'-'+(model.source==='practice'?'Practice':'League')+'-Bowling-Report.pdf';
 }
 function downloadBowlerPdf(){
  try{
@@ -791,9 +795,10 @@ function bowlerHandicap(bowlerId){const config=leagueHandicapConfig();if(!config
 function handicapScoreLabel(entry){return Number.isFinite(entry?.handicap)&&Number.isFinite(entry?.score)&&!entry.absent?'Hcp '+(entry.score+entry.handicap)+' (+'+entry.handicap+')':''}
 function renderHandicapSettings(){const config=leagueHandicapConfig();$('#handicapEnabled').checked=!!config.enabled;$('#handicapBase').value=config.base;$('#handicapPercent').value=config.percent;$('#handicapRounding').value=config.rounding;$('#handicapForm').classList.toggle('hidden',!currentLeague());$('#handicapAverages').innerHTML=(currentTeam()?.bowlers||[]).map(b=>'<label>'+esc(b.name)+' · average<input data-handicap-average="'+esc(b.id)+'" type="number" min="0" max="300" step="0.1" value="'+(b.handicapAverage??'')+'" placeholder="Use tracked season average"></label>').join('');}
 function saveHandicapSettings(event){event.preventDefault();const league=currentLeague();if(!league)return;const base=Number($('#handicapBase').value),percent=Number($('#handicapPercent').value),rounding=$('#handicapRounding').value;if(!Number.isFinite(base)||base<0||base>300||!Number.isFinite(percent)||percent<0||percent>100||!['floor','round','ceil'].includes(rounding))return toast('Use a base from 0–300 and a percentage from 0–100.');const averages=$$('[data-handicap-average]').map(input=>({id:input.dataset.handicapAverage,value:input.value===''?null:Number(input.value)}));if(averages.some(a=>a.value!==null&&(!Number.isFinite(a.value)||a.value<0||a.value>300)))return toast('Bowler averages must be between 0 and 300.');league.handicap={enabled:$('#handicapEnabled').checked,base,percent,rounding};for(const a of averages){const bowler=currentTeam()?.bowlers.find(b=>b.id===a.id);if(bowler)bowler.handicapAverage=a.value;}persist();toast('Handicap settings saved. Saved games retain their recorded handicap.')}
-function renderHandicapSummary(){const id=state.selected.bowlerId,config=leagueHandicapConfig(),handicap=id?bowlerHandicap(id):null;const entries=statsForTeam(currentTeam(),id).entries.filter(e=>Number.isFinite(e.handicap));$('#handicapSummary').textContent=!config.enabled?'':(handicap?'Current handicap: +'+handicap.pins+' per game from average '+handicap.average.toFixed(1)+'. ':id?'Enter an average or save games to calculate a handicap. ':'Choose a bowler for their current handicap. ')+(entries.length?'Recorded handicap average: '+(entries.reduce((sum,e)=>sum+e.score+e.handicap,0)/entries.length).toFixed(1)+' across '+entries.length+' games. ':'')+'Formula: '+config.percent+'% of '+config.base+', rounded '+({floor:'down',round:'to nearest',ceil:'up'}[config.rounding])+'.';$('#handicapSummary').classList.toggle('hidden',!config.enabled)}
+function renderHandicapSummary(){if(statsArePractice()){$('#handicapSummary').textContent='';$('#handicapSummary').classList.add('hidden');return}const id=state.selected.bowlerId,config=leagueHandicapConfig(),handicap=id?bowlerHandicap(id):null;const entries=statsForTeam(currentTeam(),id).entries.filter(e=>Number.isFinite(e.handicap));$('#handicapSummary').textContent=!config.enabled?'':(handicap?'Current handicap: +'+handicap.pins+' per game from average '+handicap.average.toFixed(1)+'. ':id?'Enter an average or save games to calculate a handicap. ':'Choose a bowler for their current handicap. ')+(entries.length?'Recorded handicap average: '+(entries.reduce((sum,e)=>sum+e.score+e.handicap,0)/entries.length).toFixed(1)+' across '+entries.length+' games. ':'')+'Formula: '+config.percent+'% of '+config.base+', rounded '+({floor:'down',round:'to nearest',ceil:'up'}[config.rounding])+'.';$('#handicapSummary').classList.toggle('hidden',!config.enabled)}
 
 $$('.tab').forEach(b=>b.onclick=()=>showView(b.dataset.view));$$('[data-go]').forEach(b=>b.onclick=()=>showView(b.dataset.go));
+$('#statsSource').onchange=()=>{state.selected.statsSource=$('#statsSource').value;persist()};
 $('#downloadBowlerPdfBtn').onclick=downloadBowlerPdf;
 $('#shareBowlerPdfBtn').onclick=shareBowlerPdf;
 $('#addSeasonBtn').onclick=addSeason;$('#addLeagueBtn').onclick=addLeague;$('#addTeamBtn').onclick=addTeam;$('#addBowlerBtn').onclick=addBowler;$('#saveNightBtn').onclick=saveNight;$('#clearNightBtn').onclick=clearNight;$('#runOcrBtn').onclick=runOcr;$('#exportBtn').onclick=exportBackup;$('#importBtn').onclick=importBackup;
