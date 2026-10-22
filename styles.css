@@ -204,3 +204,46 @@ label:has(>input[type="checkbox"]){display:flex;align-items:center;gap:8px;min-h
 
 
 .practice-summary{background:#e3f3eb;padding:12px;border-radius:10px;line-height:1.6}.practice-session{padding:12px}.practice-session details{margin:8px 0}.practice-session table{width:100%;border-collapse:collapse}.practice-session td,.practice-session th{text-align:left;padding:8px;border-bottom:1px solid var(--line)}.practice-marks{overflow-wrap:anywhere;line-height:1.8}
+
+/* StrikeScan 1.1: compact scan workflow */
+.session-basics{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.session-basics .date-label{min-width:0}
+#view-night h2{margin:0 0 .6rem}
+.scan-disclosure{border-top:1px solid var(--line);padding-top:6px;margin-top:12px}
+.scan-disclosure>summary{display:flex;align-items:center;justify-content:flex-start;gap:10px;cursor:pointer;font-weight:700;min-height:44px}
+.scan-disclosure>summary:before,.score-panel-summary:before,.score-game>summary:before{content:"›";font-size:1.3rem;color:#087978;flex:0 0 auto}
+.scan-disclosure[open]>summary:before,.score-review-card details[open]>.score-panel-summary:before,.score-game[open]>summary:before{content:"⌄"}
+.disclosure-hint{font-size:.75rem;font-weight:500;color:var(--muted);margin-left:auto;text-align:right}
+#nightSelection{font-size:.82rem;line-height:1.4;overflow-wrap:anywhere}
+.photo-picker{border:2px dashed #087978;background:#e3f3eb;border-radius:12px;padding:14px;color:#164e4c}
+.photo-picker input{background:#fffdf7;font-size:14px;padding:8px}
+.scan-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.scan-actions>.primary{flex:1 1 100%;min-height:52px}
+.scan-actions>button:not(.primary){flex:1}
+.manual-score-link{display:block;width:100%;margin-top:12px;font-size:.85rem}
+.score-review-card>details{margin:0}
+.score-panel-summary{display:flex;align-items:center;gap:10px;cursor:pointer;min-height:48px}
+.score-panel-summary h2{font-size:1.35rem;margin:0!important}
+.score-game{border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:12px}
+.score-game>summary{display:flex;align-items:center;gap:10px;cursor:pointer;min-height:44px;margin-bottom:0}
+.score-game[open]>summary{margin-bottom:10px}
+.score-game h3{font-size:1.05rem}
+.ocr-frame-details .row{margin-top:8px}
+@media(max-width:600px){
+ .scan-view .header-brand img{max-height:88px;object-fit:contain}
+ .scan-view main{padding-top:10px}
+ #view-night .card{padding:14px;margin-bottom:12px;border-top-width:3px}
+ #view-night .session-basics label{font-size:.8rem}
+ #view-night .session-basics input,#view-night .session-basics select{padding:.6rem .4rem;min-width:0;width:100%}
+ #view-night .scan-file-list{gap:4px}
+ #view-night .scan-file-list label{display:grid;grid-template-columns:minmax(0,1fr) 110px;align-items:center;gap:8px;font-size:.8rem;margin:6px 0}
+ #view-night .scan-file-list select{min-width:0}
+ #view-night #imagePreviewWrap{max-height:230px;overflow:auto}
+ #view-night #ocrDetected>.game-block{padding:10px;border:1px solid var(--line);border-radius:10px;margin:10px 0}
+ #view-night .score-game{padding:8px}
+ #view-night .score-game .score-table tr{margin-bottom:8px}
+ #view-night #nightValidation{font-size:.8rem;line-height:1.5}
+ #view-night .score-panel-summary .disclosure-hint{display:none}
+ #view-night #ocrStatus:not(:empty){padding:10px 0;line-height:1.5}
+}
+

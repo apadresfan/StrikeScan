@@ -4,12 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#087978" />
-  <title>StrikeScan 1.0</title>
-  <meta name="application-name" content="StrikeScan 1.0" />
-  <meta name="application-version" content="1.0" />
+  <title>StrikeScan 1.1</title>
+  <meta name="application-name" content="StrikeScan 1.1" />
+  <meta name="application-version" content="1.1" />
   <link rel="icon" type="image/svg+xml" sizes="any" href="ball-pin.svg?v=20261002-icon1" />
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="styles.css?v=1.0.0" />
+  <link rel="stylesheet" href="styles.css?v=1.1.0" />
 </head>
 <body>
   <header class="topbar graphic-topbar">
@@ -111,70 +111,66 @@
     </section>
 
     <section id="view-night" class="view">
-      <div class="card">
-        <div class="section-title wrap">
-          <div>
-            <div id="nightEyebrow" class="eyebrow">LEAGUE NIGHT</div>
-            <h2 id="nightSelection">Choose a league and team</h2>
-          </div>
+      <div class="card session-card">
+        <div class="section-title"><div><div id="nightEyebrow" class="eyebrow">LEAGUE NIGHT</div><h2>1 · Session</h2></div></div>
+        <div class="session-basics">
+          <label>Session type<select id="sessionType"><option value="league">League night</option><option value="practice">Practice</option></select></label>
           <label class="date-label"><span id="nightDateLabel">League night date</span><input type="date" id="nightDate" /></label>
         </div>
-        <div class="selector-row">
-          <label>Session type<select id="sessionType"><option value="league">League night</option><option value="practice">Practice</option></select></label>
-          <label id="practiceBowlerLabel" class="hidden">Practicing bowler<select id="practiceBowler"></select></label>
-        </div>
-        <p id="practiceHelp" class="muted hidden">Scan 1–3 games for the selected bowler and choose the practice date. If other people appear in the photo, assign your bowler’s row and skip the others. Leave unplayed games blank. Practice is saved separately from league scores and handicaps.</p>
-        <div class="selector-row">
-          <label>Season<select id="nightSeasonSelect"></select></label>
-          <label>League<select id="nightLeagueSelect"></select></label>
-          <label>Team<select id="nightTeamSelect"></select></label>
-        </div>
-      </div>
-
-      <div class="card ocr-card">
-        <div class="section-title wrap">
-          <div>
-            <h2>Scoreboard Photo OCR</h2>
-            <p class="muted">Upload or take a photo. The site reads it locally in your browser, then lets you review every frame before saving.</p>
+        <label id="practiceBowlerLabel" class="hidden">Practicing bowler<select id="practiceBowler"></select></label>
+        <p id="practiceHelp" class="muted small hidden">Save only your row. Skip the other bowlers after scanning.</p>
+        <details id="sessionSettings" class="scan-disclosure">
+          <summary><span id="nightSelection">Choose a league and team</span><span class="disclosure-hint">Change team</span></summary>
+          <div class="selector-row">
+            <label>Season<select id="nightSeasonSelect"></select></label>
+            <label>League<select id="nightLeagueSelect"></select></label>
+            <label>Team<select id="nightTeamSelect"></select></label>
           </div>
-          <span class="badge beta">Auto Scan</span>
-        </div>
-        <label>Scoreboard style<select id="ocrMode"><option value="digital">Digital grid — turquoise, blue or pink</option><option value="standard">Other display — standard OCR</option></select></label><label>Game shown in this photo<select id="ocrGame"><option value="1">Game 1</option><option value="2">Game 2</option><option value="3">Game 3</option></select></label><p class="muted small">Choose up to three photos. Assign a different game number to each photo. Include the full grid, all 10 frames, and the displayed totals. Confirm which row belongs to each bowler after scanning.</p>
-        <label>Bowlers on the scoreboard<select id="scoreboardRowCount"><option value="0">Detect automatically</option><option value="1">1 bowler</option><option value="2">2 bowlers</option><option value="3">3 bowlers</option><option value="4">4 bowlers</option><option value="5">5 bowlers</option><option value="6">6 bowlers</option></select></label>
-        <p class="muted small">Count everyone pictured, not just the bowler you want to save. Select the count if automatic detection misses rows; the reader will retry instead of accepting an incomplete grid. Use photos with the same row count in a batch, or scan them separately.</p>
-        <input id="scoreboardImage" type="file" accept="image/*" aria-label="Choose up to three scoreboard photos" multiple />
-        <div id="scanFileList" class="scan-file-list"></div>
-        <div id="imagePreviewWrap" class="hidden"><img id="imagePreview" alt="Scoreboard preview" /></div>
-        <p class="muted small">Brightness and contrast are adjusted automatically while reading the scoreboard.</p>
-        <div class="row wrap">
-          <button id="runOcrBtn" class="primary">Read Scoreboard Photos</button>
-          <button id="cancelScanBtn" class="danger ghost hidden">Cancel Scan</button>
-          <button id="undoScanBtn" class="ghost" disabled>Undo Last Scan</button>
-        </div>
-        <div id="ocrProgress" class="progress hidden"><div id="ocrProgressBar"></div></div>
-        <div id="ocrStatus" class="muted small"></div>
-        <details id="ocrDetails" class="hidden">
-          <summary>OCR text & detected rows</summary>
-          <div id="scanReviewControls" class="row wrap hidden"><label>Scanned game<select id="ocrReviewGame"></select></label><button id="rememberOrderBtn" class="ghost">Remember Bowler Order</button></div><p class="muted small">Check each row’s bowler. Remember the confirmed order for this team’s next scan. Review amber frames on the score sheet; total mismatches are marked separately.</p>
-          <pre id="ocrText"></pre>
-          <div id="ocrDetected"></div>
         </details>
       </div>
 
-      <div class="card">
-        <div class="section-title wrap">
-          <div>
-            <h2>Score Sheet</h2>
-            <p class="muted">Enter marks such as X, 9/, 9-, 72. In the 10th, examples include XXX, X9/, 9/X, 9/9.</p>
+      <div class="card ocr-card">
+        <h2>2 · Add photos</h2>
+        <p class="muted small">Choose up to 3 scoreboard photos, then scan.</p>
+        <label class="photo-picker">Choose photos or take a picture<input id="scoreboardImage" type="file" accept="image/*" aria-label="Choose up to three scoreboard photos" multiple /></label>
+        <label id="singleGameLabel">Game in this photo<select id="ocrGame"><option value="1">Game 1</option><option value="2">Game 2</option><option value="3">Game 3</option></select></label>
+        <div id="scanFileList" class="scan-file-list"></div>
+        <details id="scanOptions" class="scan-disclosure">
+          <summary>Scan settings<span class="disclosure-hint">Style & bowler count</span></summary>
+          <label>Scoreboard style<select id="ocrMode"><option value="digital">Digital grid — turquoise, blue or pink</option><option value="standard">Other display — standard OCR</option></select></label>
+          <label>Bowlers on the scoreboard<select id="scoreboardRowCount"><option value="0">Detect automatically</option><option value="1">1 bowler</option><option value="2">2 bowlers</option><option value="3">3 bowlers</option><option value="4">4 bowlers</option><option value="5">5 bowlers</option><option value="6">6 bowlers</option></select></label>
+          <p class="muted small">Missing rows? Choose how many bowlers are pictured, including people you will skip. Use the same row count for all photos in a batch, or scan them separately.</p>
+        </details>
+        <details id="scanPhotoPreview" class="scan-disclosure hidden"><summary>View photo</summary><div id="imagePreviewWrap" class="hidden"><img id="imagePreview" alt="Scoreboard preview" /></div></details>
+        <div class="scan-actions">
+          <button id="runOcrBtn" class="primary large">Scan Photos</button>
+          <button id="cancelScanBtn" class="danger ghost hidden">Cancel Scan</button>
+          <button id="undoScanBtn" class="ghost hidden" disabled>Undo Last Scan</button>
+        </div>
+        <div id="ocrProgress" class="progress hidden"><div id="ocrProgressBar"></div></div>
+        <div id="ocrStatus" class="muted small" role="status" aria-live="polite"></div>
+        <button id="manualScoreBtn" class="manual-score-link ghost">Enter scores without a photo</button>
+        <details class="scan-disclosure"><summary>Photo tips</summary><p class="muted small">Include the full grid, all 10 frames, and the totals. Photograph straight on. Brightness and contrast adjust automatically.</p></details>
+        <details id="ocrDetails" class="hidden scan-disclosure">
+          <summary>Choose bowlers & review scan</summary>
+          <p class="muted small">Assign each row, or skip it. Correct amber frames in the score sheet.</p>
+          <div id="scanReviewControls" class="row wrap hidden"><label>Scanned game<select id="ocrReviewGame"></select></label><button id="rememberOrderBtn" class="ghost">Remember Bowler Order</button></div>
+          <div id="ocrDetected"></div>
+          <details class="scan-disclosure"><summary>Technical scan details</summary><pre id="ocrText"></pre></details>
+        </details>
+      </div>
+
+      <div class="card score-review-card">
+        <details id="scoreSheetPanel">
+          <summary class="score-panel-summary"><h2>3 · Review & save</h2><span class="disclosure-hint">Scores & frames</span></summary>
+          <p class="ocr-legend">Amber frames need checking. Tap Review to see the photo.</p>
+          <div id="scoreSheet" class="score-sheet"></div>
+          <div class="savebar">
+            <div id="nightValidation" class="muted"></div>
+            <button id="saveNightBtn" class="primary large">Save 3-Game League Night</button>
           </div>
-          <button id="clearNightBtn" class="danger ghost">Clear</button>
-        </div>
-        <p class="ocr-legend"><span aria-hidden="true">🟨</span> Amber frames need OCR review. Correct them in the score sheet before saving.</p>
-        <div id="scoreSheet" class="score-sheet"></div>
-        <div class="savebar">
-          <div id="nightValidation" class="muted"></div>
-          <button id="saveNightBtn" class="primary large">Save 3-Game League Night</button>
-        </div>
+          <details class="scan-disclosure"><summary>Entry help & clear sheet</summary><p class="muted small">Use X, 9/, 9-, or 72. Tenth frame: XXX, X9/, 9/X, or 9/9. You can also enter a remembered total. For practice, leave unused games blank.</p><button id="clearNightBtn" class="danger ghost">Clear unsaved scores</button></details>
+        </details>
       </div>
     </section>
 
@@ -249,7 +245,7 @@
         </div>
       </div>
     </section>
-    <footer style="text-align:center;margin-top:1rem;padding:.8rem;background:#fff9ee;border-radius:10px;color:#452f58"><small id="appVersion">StrikeScan 1.0</small></footer>
+    <footer style="text-align:center;margin-top:1rem;padding:.8rem;background:#fff9ee;border-radius:10px;color:#452f58"><small id="appVersion">StrikeScan 1.1</small></footer>
   </main>
 
 
@@ -270,10 +266,11 @@
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script src="vendor/jspdf.umd.min.js"></script>
   <script src="pdf-header.js?v=20261003-leopard2"></script>
-  <script src="app.js?v=1.0.0"></script>
+  <script src="app.js?v=1.1.0"></script>
   <script type="module" src="cloud-sync.js?v=20261002-cloud1"></script>
 </body>
 </html>
+
 
 
 
