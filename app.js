@@ -87,7 +87,39 @@ function saveNight(){if(isPractice())return savePractice();const t=currentTeam()
   t.nights.push({id:uid(),date:$('#nightDate').value||localToday(),createdAt:new Date().toISOString(),entries});t.nights.sort((a,b)=>a.date.localeCompare(b.date));nightDraft=newSessionDraft(t);clearScanReview();persist();toast(bestNightNotice(t,t.nights.find(n=>n.entries===entries))||'League night saved')}
 function statsArePractice(){return state.selected.statsSource==='practice'}
 function statsSourceLabel(){return statsArePractice()?'Practice Sessions':'League Nights'}
-function selectedStatsTeam(){const team=currentTeam();return team&&statsArePractice()?{...team,nights:team.practiceSessions||[]}:team}
+function statsSessions(team,source=statsArePractice()?'practice':'league'){
+ return (source==='practice'?team?.practiceSessions:team?.nights)||[];
+}
+function statisticsScore(entry){if(entry.absent)return null;return rememberedScore(entry.score)??entryScore(entry)}
+function selectedStatsTeam(){const team=currentTeam();return team?{...team,nights:statsSessions(team).map(n=>({...n,entries:n.entries.map(e=>({...e,score:statisticsScore(e)}))}))}:null}
+function savedStatsSelections(source=statsArePractice()?'practice':'league'){
+ const found=[];for(const season of state.seasons)for(const league of season.leagues)for(const team of league.teams){
+  const games=statsSessions(team,source).flatMap(n=>n.entries).filter(e=>statisticsScore(e)!==null).length;
+  if(games)found.push({seasonId:season.id,leagueId:league.id,teamId:team.id,name:season.name+' · '+league.name+' · '+team.name,games});
+ }return found;
+}
+function rememberStatsSelection(){
+ if(!statsForTeam(selectedStatsTeam(),state.selected.bowlerId).games)return;
+ const source=statsArePractice()?'practice':'league';state.selected.statsSelections??={};
+ state.selected.statsSelections[source]={seasonId:state.selected.seasonId,leagueId:state.selected.leagueId,teamId:state.selected.teamId,bowlerId:state.selected.bowlerId};
+}
+function changeStatsSource(){
+ rememberStatsSelection();const source=$('#statsSource').value;state.selected.statsSource=source;
+ const available=savedStatsSelections(source),remembered=state.selected.statsSelections?.[source];
+ const saved=remembered&&available.find(s=>s.teamId===remembered.teamId&&s.leagueId===remembered.leagueId&&s.seasonId===remembered.seasonId);
+ if(saved)Object.assign(state.selected,remembered);
+ else if(!statsSessions(currentTeam(),source).some(n=>n.entries.some(e=>statisticsScore(e)!==null))&&available.length===1){const saved=available[0];Object.assign(state.selected,{seasonId:saved.seasonId,leagueId:saved.leagueId,teamId:saved.teamId,bowlerId:null})}
+ else if(!statsForTeam(selectedStatsTeam(),state.selected.bowlerId).games)state.selected.bowlerId=null;
+ persist();
+}
+function renderStatsHelp(st){
+ const root=$('#statsSelectionHelp');root.classList.toggle('hidden',st.games>0);if(st.games){root.innerHTML='';return}
+ const team=currentTeam(),all=statsForTeam(selectedStatsTeam());
+ if(all.games){root.innerHTML='<p>No '+esc(statsSourceLabel().toLowerCase())+' scores for this bowler in the current selection.</p><button id="showAllSavedBowlers" class="ghost">Show all bowlers with saved scores</button>';$('#showAllSavedBowlers').onclick=()=>{state.selected.bowlerId=null;persist()};return}
+ const available=savedStatsSelections();
+ root.innerHTML='<p>No '+esc(statsSourceLabel().toLowerCase())+' scores in the selected season, league and team.</p>'+(available.length?'<p>Saved scores are available here:</p>'+available.map((s,i)=>'<button class="ghost" data-saved-stats="'+i+'">'+esc(s.name)+' · '+s.games+' games</button>').join(' '):'<p>Check History and your Cloud Sync status if you expected saved games here.</p>');
+ root.querySelectorAll('[data-saved-stats]').forEach(button=>button.onclick=()=>{const selection=available[+button.dataset.savedStats];Object.assign(state.selected,{seasonId:selection.seasonId,leagueId:selection.leagueId,teamId:selection.teamId,bowlerId:null});persist()});
+}
 function dashboardBowlers(t){
  const byId=new Map((t?.bowlers||[]).map(b=>[b.id,{id:b.id,name:b.name}]));
  for(const n of t?.nights||[])for(const e of n.entries)if(!byId.has(e.bowlerId))byId.set(e.bowlerId,{id:e.bowlerId,name:e.name});
@@ -172,7 +204,7 @@ function renderDashboard(){
  $('#dashSubtitle').textContent=s?s.name+' season'+(bowler?' · '+l.name:'')+' · '+statsSourceLabel()+' · '+(bowler?'Individual bowler statistics':'All team bowlers'):'Create a season, league, and team to get started.';
  $('#downloadBowlerPdfBtn').disabled=!bowler||!statsForTeam(t,id).games;
  $('#shareBowlerPdfBtn').disabled=$('#downloadBowlerPdfBtn').disabled;
- const st=statsForTeam(t,id),decimal=value=>value===null?'—':value.toFixed(1);
+ const st=statsForTeam(t,id),decimal=value=>value===null?'—':value.toFixed(1);renderStatsHelp(st);rememberStatsSelection();
  const cards=items=>items.map(([label,value])=>'<div class="stat"><div class="value">'+value+'</div><div class="label">'+label+'</div></div>').join('');
  $('#statCards').innerHTML=cards([['Games',st.games],['Average',decimal(st.avg)],['High Game',st.high??'—'],['High Series',st.highSeries??'—']]);
  $('#bowlerStatCards').innerHTML=cards([['Average Series',decimal(st.avgSeries)],['Strikes',st.strikes],['Spares',st.spares],['Open Frames',st.opens]]);
@@ -798,7 +830,7 @@ function saveHandicapSettings(event){event.preventDefault();const league=current
 function renderHandicapSummary(){if(statsArePractice()){$('#handicapSummary').textContent='';$('#handicapSummary').classList.add('hidden');return}const id=state.selected.bowlerId,config=leagueHandicapConfig(),handicap=id?bowlerHandicap(id):null;const entries=statsForTeam(currentTeam(),id).entries.filter(e=>Number.isFinite(e.handicap));$('#handicapSummary').textContent=!config.enabled?'':(handicap?'Current handicap: +'+handicap.pins+' per game from average '+handicap.average.toFixed(1)+'. ':id?'Enter an average or save games to calculate a handicap. ':'Choose a bowler for their current handicap. ')+(entries.length?'Recorded handicap average: '+(entries.reduce((sum,e)=>sum+e.score+e.handicap,0)/entries.length).toFixed(1)+' across '+entries.length+' games. ':'')+'Formula: '+config.percent+'% of '+config.base+', rounded '+({floor:'down',round:'to nearest',ceil:'up'}[config.rounding])+'.';$('#handicapSummary').classList.toggle('hidden',!config.enabled)}
 
 $$('.tab').forEach(b=>b.onclick=()=>showView(b.dataset.view));$$('[data-go]').forEach(b=>b.onclick=()=>showView(b.dataset.go));
-$('#statsSource').onchange=()=>{state.selected.statsSource=$('#statsSource').value;persist()};
+$('#statsSource').onchange=changeStatsSource;
 $('#downloadBowlerPdfBtn').onclick=downloadBowlerPdf;
 $('#shareBowlerPdfBtn').onclick=shareBowlerPdf;
 $('#addSeasonBtn').onclick=addSeason;$('#addLeagueBtn').onclick=addLeague;$('#addTeamBtn').onclick=addTeam;$('#addBowlerBtn').onclick=addBowler;$('#saveNightBtn').onclick=saveNight;$('#clearNightBtn').onclick=clearNight;$('#runOcrBtn').onclick=runOcr;$('#exportBtn').onclick=exportBackup;$('#importBtn').onclick=importBackup;
@@ -822,6 +854,7 @@ renderAll();
 
 
 let progressResizeTimer;window.addEventListener('resize',()=>{clearTimeout(progressResizeTimer);progressResizeTimer=setTimeout(renderBowlerProgress,120)});
+
 
 
 
