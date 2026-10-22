@@ -128,6 +128,6 @@ onAuthStateChanged(auth,next=>{
  el('cloudLogin').classList.toggle('hidden',!!user);el('cloudAccount').classList.toggle('hidden',!user);
  if(!user){status('Sign in to sync. Your original device scores are available while signed out.');return;}
  el('cloudUser').textContent=user.email;
- try{meta=JSON.parse(localStorage.getItem(metaKey()))||{revision:0,baseline:bridge.payload()}}catch{meta={revision:0,baseline:bridge.payload()}}
+ try{meta=JSON.parse(localStorage.getItem(metaKey()))||{revision:0,baseline:null}}catch{meta={revision:0,baseline:null}}
  status('Connecting to your cloud scores…');listen();
 });
