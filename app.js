@@ -851,7 +851,7 @@ window.bowlingCloud={
  payload:()=>JSON.stringify({version:1,seasons:state.seasons}),
  hasDraft:()=>[...sessionDrafts.values()].some(d=>d.games.some(g=>g.bowlers.some(b=>b.absent||b.totalOnly||b.frames.some(Boolean))))||!!savedScoreEdit||!!nightDraft?.games.some(g=>g.bowlers.some(b=>b.absent||b.totalOnly||b.frames.some(Boolean))),
  local:()=>JSON.parse(localStorage.getItem(STORE_KEY)||JSON.stringify(blankState())),
- scope:userId=>{activeStoreKey=userId?STORE_KEY+'.account.'+userId:STORE_KEY;try{state=JSON.parse(localStorage.getItem(activeStoreKey))||blankState()}catch{state=blankState()}nightDraft=null;sessionDrafts.clear();renderAll()},
+ scope:userId=>{activeStoreKey=userId?STORE_KEY+'.account.'+userId:STORE_KEY;try{const accountData=localStorage.getItem(activeStoreKey);const originalData=localStorage.getItem(STORE_KEY);const original=originalData?JSON.parse(originalData):null;state=accountData?JSON.parse(accountData):(userId&&Array.isArray(original?.seasons)&&original.seasons.length?cloneData(original):blankState());if(!Array.isArray(state?.seasons))state=blankState();if(!state.selected)state.selected=blankState().selected;}catch{state=blankState()}nightDraft=null;sessionDrafts.clear();renderAll()},
  replace:payload=>{const data=JSON.parse(payload);if(!Array.isArray(data.seasons))throw Error('Invalid cloud data');state={version:1,seasons:data.seasons,selected:state.selected||blankState().selected};nightDraft=null;sessionDrafts.clear();localStorage.setItem(activeStoreKey,JSON.stringify(state));renderAll()},
  backup:()=>{localStorage.setItem(activeStoreKey+'.beforeCloudReplace',JSON.stringify(state));exportBackup()}
 };
