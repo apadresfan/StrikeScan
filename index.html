@@ -4,12 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#087978" />
-  <title>StrikeScan 1.1.1</title>
-  <meta name="application-name" content="StrikeScan 1.1.1" />
-  <meta name="application-version" content="1.1.1" />
+  <title>StrikeScan 1.2</title>
+  <meta name="application-name" content="StrikeScan 1.2" />
+  <meta name="application-version" content="1.2" />
   <link rel="icon" type="image/svg+xml" sizes="any" href="ball-pin.svg?v=20261002-icon1" />
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="styles.css?v=1.1.1" />
+  <link rel="stylesheet" href="styles.css?v=1.2.0" />
 </head>
 <body>
   <header class="topbar graphic-topbar">
@@ -245,10 +245,17 @@
         </div>
       </div>
     </section>
-    <footer style="text-align:center;margin-top:1rem;padding:.8rem;background:#fff9ee;border-radius:10px;color:#452f58"><small id="appVersion">StrikeScan 1.1.1</small></footer>
+    <footer style="text-align:center;margin-top:1rem;padding:.8rem;background:#fff9ee;border-radius:10px;color:#452f58"><small id="appVersion">StrikeScan 1.2</small></footer>
   </main>
 
 
+  <dialog id="nightReportDialog" class="saved-score-dialog night-report-dialog" aria-labelledby="nightReportTitle">
+    <div class="section-title"><h2 id="nightReportTitle">Night Stats</h2><button id="closeNightReport" class="ghost" aria-label="Close night stats">Close</button></div>
+    <p id="nightReportSummary" class="muted small"></p>
+    <div class="night-report-actions"><button class="primary" data-night-export="pdf">Download PDF</button><button class="ghost" data-night-export="png">Save Picture</button><button class="ghost" data-night-export="pdf" data-share="true">Share PDF</button><button class="ghost" data-night-export="png" data-share="true">Share Picture</button></div>
+    <p id="nightReportStatus" class="small" role="status" aria-live="polite"></p>
+    <div id="nightReportPreview"></div>
+  </dialog>
   <dialog id="savedScoreDialog" class="saved-score-dialog" aria-labelledby="savedScoreTitle">
     <h2 id="savedScoreTitle">Edit saved scores</h2>
     <p class="muted small">Correct any frame. Use X for strikes, / for spares, and - for misses. Totals update automatically.</p>
@@ -266,10 +273,11 @@
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script src="vendor/jspdf.umd.min.js"></script>
   <script src="pdf-header.js?v=20261003-leopard2"></script>
-  <script src="app.js?v=1.1.1"></script>
+  <script src="app.js?v=1.2.0"></script>
   <script type="module" src="cloud-sync.js?v=20261002-cloud1"></script>
 </body>
 </html>
+
 
 
 

@@ -247,3 +247,6 @@ label:has(>input[type="checkbox"]){display:flex;align-items:center;gap:8px;min-h
  #view-night #ocrStatus:not(:empty){padding:10px 0;line-height:1.5}
 }
 
+
+.night-report-dialog{max-width:900px}.night-report-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:12px 0}.night-report-actions button{min-height:44px}#nightReportPreview img{display:block;width:100%;height:auto;border:1px solid var(--line);margin:14px auto;border-radius:8px}@media(max-width:600px){.night-report-actions{grid-template-columns:1fr 1fr}.night-report-actions button{font-size:.85rem;padding:10px 6px}.night-report-dialog .section-title h2{font-size:1.2rem}}
+
