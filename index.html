@@ -4,12 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#087978" />
-  <title>StrikeScan 1.2</title>
-  <meta name="application-name" content="StrikeScan 1.2" />
-  <meta name="application-version" content="1.2" />
+  <title>StrikeScan 1.3</title>
+  <meta name="application-name" content="StrikeScan 1.3" />
+  <meta name="application-version" content="1.3" />
   <link rel="icon" type="image/svg+xml" sizes="any" href="ball-pin.svg?v=20261002-icon1" />
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="styles.css?v=1.2.0" />
+  <link rel="stylesheet" href="styles.css?v=1.3.0" />
 </head>
 <body>
   <header class="topbar graphic-topbar">
@@ -118,6 +118,7 @@
           <label class="date-label"><span id="nightDateLabel">League night date</span><input type="date" id="nightDate" /></label>
         </div>
         <label id="practiceBowlerLabel" class="hidden">Practicing bowler<select id="practiceBowler"></select></label>
+        <label id="practiceRowLabel" class="hidden">My scoreboard row<select id="practiceRow"><option value="0">Choose after each scan</option><option value="1">Row 1</option><option value="2">Row 2</option><option value="3">Row 3</option><option value="4">Row 4</option><option value="5">Row 5</option><option value="6">Row 6</option></select><span class="muted small">Remembered for this bowler and team. Other rows are skipped automatically.</span></label>
         <p id="practiceHelp" class="muted small hidden">Save only your row. Skip the other bowlers after scanning.</p>
         <details id="sessionSettings" class="scan-disclosure">
           <summary><span id="nightSelection">Choose a league and team</span><span class="disclosure-hint">Change team</span></summary>
@@ -164,8 +165,10 @@
         <details id="scoreSheetPanel">
           <summary class="score-panel-summary"><h2>3 · Review & save</h2><span class="disclosure-hint">Scores & frames</span></summary>
           <p class="ocr-legend">Amber frames need checking. Tap Review to see the photo.</p>
+          <div id="reviewChecklist" class="review-checklist hidden"><strong id="reviewCount" role="status"></strong><button id="reviewNextBtn" class="ghost">Review next</button></div>
           <div id="scoreSheet" class="score-sheet"></div>
           <div class="savebar">
+            <p id="draftSaveStatus" class="small" role="status"></p><button id="saveSyncStatus" class="ghost small" type="button">Saved games: Saved on device</button>
             <div id="nightValidation" class="muted"></div>
             <button id="saveNightBtn" class="primary large">Save 3-Game League Night</button>
           </div>
@@ -245,7 +248,7 @@
         </div>
       </div>
     </section>
-    <footer style="text-align:center;margin-top:1rem;padding:.8rem;background:#fff9ee;border-radius:10px;color:#452f58"><small id="appVersion">StrikeScan 1.2</small></footer>
+    <footer style="text-align:center;margin-top:1rem;padding:.8rem;background:#fff9ee;border-radius:10px;color:#452f58"><small id="appVersion">StrikeScan 1.3</small></footer>
   </main>
 
 
@@ -253,6 +256,7 @@
     <div class="section-title"><h2 id="nightReportTitle">Night Stats</h2><button id="closeNightReport" class="ghost" aria-label="Close night stats">Close</button></div>
     <p id="nightReportSummary" class="muted small"></p>
     <div class="night-report-actions"><button class="primary" data-night-export="pdf">Download PDF</button><button class="ghost" data-night-export="png">Save Picture</button><button class="ghost" data-night-export="pdf" data-share="true">Share PDF</button><button class="ghost" data-night-export="png" data-share="true">Share Picture</button></div>
+    <details class="scan-disclosure"><summary>Compact sharing card</summary><p class="muted small">A phone-friendly summary with scores, series, high game, and average comparison.</p><div class="night-report-actions"><button class="primary" data-night-export="card">Save Compact Card</button><button class="ghost" data-night-export="card" data-share="true">Share Compact Card</button></div></details>
     <p id="nightReportStatus" class="small" role="status" aria-live="polite"></p>
     <div id="nightReportPreview"></div>
   </dialog>
@@ -273,10 +277,11 @@
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script src="vendor/jspdf.umd.min.js"></script>
   <script src="pdf-header.js?v=20261003-leopard2"></script>
-  <script src="app.js?v=1.2.0"></script>
-  <script type="module" src="cloud-sync.js?v=20261002-cloud1"></script>
+  <script src="app.js?v=1.3.0"></script>
+  <script type="module" src="cloud-sync.js?v=1.3.0"></script>
 </body>
 </html>
+
 
 
 

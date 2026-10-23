@@ -62,9 +62,66 @@ function practiceBowler(){const team=currentTeam(),select=$('#practiceBowler');r
 function sessionRoster(){return isPractice()?[practiceBowler()].filter(Boolean):(currentTeam()?.bowlers||[])}
 function newSessionDraft(team){const roster=sessionRoster();return {teamId:team.id,practice:isPractice(),practiceBowlerId:isPractice()?practiceBowler()?.id:null,date:localToday(),games:blankGames({bowlers:roster})}}
 function draftKey(d){return [activeStoreKey,d.teamId,d.practice?'practice':'league',d.practiceBowlerId||''].join(':')}
+
+function draftHasScores(d){return !!d?.games?.some(g=>g.bowlers?.some(b=>b.absent||b.totalOnly||b.frames?.some(Boolean)))}
+function protectDrafts(){
+ try{
+  if(nightDraft)nightDraft.date=$('#nightDate').value||nightDraft.date;
+  const drafts=new Map(sessionDrafts);if(nightDraft)drafts.set(draftKey(nightDraft),nightDraft);
+  const items=[...drafts].filter(([,d])=>draftHasScores(d));
+  localStorage.setItem(activeStoreKey+'.drafts.v1',JSON.stringify({context:{...state.selected,practice:isPractice(),practiceBowlerId:practiceBowler()?.id},drafts:items}));
+  $('#draftSaveStatus').textContent=items.length?'Draft saved on this device. Save games to sync.':'';
+ }catch{$('#draftSaveStatus').textContent='Draft could not be saved on this device. Keep this page open until you save your games.'}
+}
+function restoreDrafts(){
+ try{
+  const saved=JSON.parse(localStorage.getItem(activeStoreKey+'.drafts.v1'));if(!saved)return;
+  const teams=state.seasons.flatMap(s=>s.leagues.flatMap(l=>l.teams));
+  for(const [,d] of saved.drafts||[]){const team=teams.find(t=>t.id===d?.teamId);
+   if(!team||!Array.isArray(d.games)||d.games.length!==3||!d.games.every((g,i)=>g.game===i+1&&Array.isArray(g.bowlers)&&g.bowlers.every(b=>team.bowlers.some(p=>p.id===b.bowlerId)&&Array.isArray(b.frames)&&b.frames.length===10)))continue;
+   sessionDrafts.set(draftKey(d),d);
+  }
+  const ctx=saved.context;if(ctx&&currentTeam(ctx.seasonId,ctx.leagueId,ctx.teamId)){
+   Object.assign(state.selected,{seasonId:ctx.seasonId,leagueId:ctx.leagueId,teamId:ctx.teamId});
+   $('#sessionType').value=ctx.practice?'practice':'league';renderSessionControls();$('#practiceBowler').value=ctx.practiceBowlerId||'';
+  }
+  if(sessionDrafts.size)$('#scoreSheetPanel').open=true;
+ }catch{/* An invalid local draft does not change saved scores. */}
+}
+function reviewItems(){
+ return (nightDraft?.games||[]).flatMap(g=>g.bowlers.flatMap(b=>{
+  if(b.absent||b.totalOnly)return [];
+  const items=(b.ocrUncertain||[]).flatMap((flag,frame)=>flag?[{game:g.game,id:b.bowlerId,frame,name:b.name}]:[]);
+  if(verificationMismatch(b))items.push({game:g.game,id:b.bowlerId,frame:null,name:b.name});return items;
+ }));
+}
+function renderReviewChecklist(){
+ const items=reviewItems(),frames=items.filter(x=>x.frame!==null).length,mismatches=items.length-frames;
+ $('#reviewChecklist').classList.toggle('hidden',!items.length);
+ $('#reviewCount').textContent=frames+' uncertain frame'+(frames===1?'':'s')+(mismatches?' · '+mismatches+' total mismatch'+(mismatches===1?'':'es'):'');
+}
+function reviewNext(){
+ const item=reviewItems()[0];if(!item)return;openScoreGame(item.game);
+ if(item.frame!==null)openFrameReview(item.game,item.id,item.frame);
+ else{const input=$('[data-total="'+item.game+':'+item.id+'"]');input?.scrollIntoView({block:'center'});input?.focus()}
+}
+function duplicateEntries(entries){return JSON.stringify(entries.map(e=>[e.bowlerId,e.game,e.absent?'ABS':statisticsScore(e)]).sort((a,b)=>String(a[0]).localeCompare(String(b[0]))||a[1]-b[1]))}
+function confirmDuplicate(sessions,date,entries){
+ return !sessions.some(n=>n.date===date&&duplicateEntries(n.entries)===duplicateEntries(entries))||confirm('These same scores are already saved for '+formatDate(date)+'. Save another copy anyway?');
+}
+function renderPracticeRow(){
+ $('#practiceRowLabel').classList.toggle('hidden',!isPractice());
+ $('#practiceRow').value=String(currentTeam()?.practiceRows?.[practiceBowler()?.id]||0);
+}
+function renderSaveSyncStatus(){
+ const s=window.bowlingSyncStatus||{state:'device',message:'Saved games are stored on this device. Sign in to sync.'};
+ const labels={device:'Saved on device',connecting:'Connecting to cloud',pending:'Waiting to sync',syncing:'Syncing',synced:'Synced',offline:'Offline · saved on device',attention:'Sync needs attention'};
+ $('#saveSyncStatus').textContent='Saved games: '+(labels[s.state]||labels.device);$('#saveSyncStatus').title=s.message;$('#saveSyncStatus').dataset.status=s.state;
+}
+
 function resetScanContext(){clearScanReview();scanFiles=[];$('#scoreboardImage').value='';$('#scanFileList').innerHTML='';$('#imagePreviewWrap').classList.add('hidden');$('#scanPhotoPreview').classList.add('hidden');$('#singleGameLabel').classList.remove('hidden');$('#scanFileList').classList.remove('hidden');$('#runOcrBtn').disabled=true;$('#ocrStatus').textContent=''}
 function changeSession(){if(scanSession)return;ensureDraft();renderNightHeader();renderScoreSheet()}
-function renderSessionControls(){const team=currentTeam(),select=$('#practiceBowler'),selected=select.value;select.innerHTML=optionHtml(team?.bowlers||[],selected,'Choose bowler');if(!team?.bowlers.some(b=>b.id===selected))select.value=team?.bowlers[0]?.id||'';$('#practiceBowlerLabel').classList.toggle('hidden',!isPractice());$('#practiceHelp').classList.toggle('hidden',!isPractice());$('#nightEyebrow').textContent=isPractice()?'PRACTICE SESSION':'LEAGUE NIGHT';$('#nightDateLabel').textContent=isPractice()?'Practice date':'League night date';$('#saveNightBtn').textContent=isPractice()?'Save Practice Games':'Save 3-Game League Night';$('#rememberOrderBtn').classList.toggle('hidden',isPractice())}
+function renderSessionControls(){const team=currentTeam(),select=$('#practiceBowler'),selected=select.value;select.innerHTML=optionHtml(team?.bowlers||[],selected,'Choose bowler');if(!team?.bowlers.some(b=>b.id===selected))select.value=team?.bowlers[0]?.id||'';$('#practiceBowlerLabel').classList.toggle('hidden',!isPractice());$('#practiceHelp').classList.toggle('hidden',!isPractice());$('#nightEyebrow').textContent=isPractice()?'PRACTICE SESSION':'LEAGUE NIGHT';$('#nightDateLabel').textContent=isPractice()?'Practice date':'League night date';$('#saveNightBtn').textContent=isPractice()?'Save Practice Games':'Save 3-Game League Night';$('#rememberOrderBtn').classList.toggle('hidden',isPractice());renderPracticeRow()}
 function findSavedSession(team,id){return [...(team?.nights||[]),...(team?.practiceSessions||[])].find(n=>n.id===id)}
 
 function ensureDraft(){renderSessionControls();const t=currentTeam();if(!t){nightDraft=null;return}const desired=newSessionDraft(t);if(!nightDraft||draftKey(nightDraft)!==draftKey(desired)){
@@ -79,13 +136,14 @@ function renderScoreSheet(){ensureDraft();if($('#undoScanBtn'))$('#undoScanBtn')
   $$('[data-total]').forEach(input=>input.oninput=()=>{const [game,id]=input.dataset.total.split(':');const b=nightDraft.games.find(g=>g.game===+game).bowlers.find(b=>b.bowlerId===id);b.manualTotal=input.value;b.totalOnly=input.value!=='';updateTotals()});
   $$('[data-draft-absent]').forEach(el=>el.onchange=()=>{const [game,id]=el.dataset.draftAbsent.split(':');nightDraft.games.find(g=>g.game===+game).bowlers.find(b=>b.bowlerId===id).absent=el.checked;renderScoreSheet()});
   $$('.frame-input').forEach(inp=>{inp.addEventListener('input',e=>{const g=nightDraft.games.find(x=>x.game===+inp.dataset.game);const b=g.bowlers.find(x=>x.bowlerId===inp.dataset.bowler);b.totalOnly=false;delete b.manualTotal;b.frames[+inp.dataset.frame]=normalizeFrame(inp.value);inp.value=b.frames[+inp.dataset.frame];if(b.ocrUncertain){b.ocrUncertain[+inp.dataset.frame]=parseFrame(inp.value,+inp.dataset.frame)===null;inp.classList.toggle('ocr-uncertain',b.ocrUncertain[+inp.dataset.frame]);}updateOcrFromScoreSheet(b,g.game,+inp.dataset.frame);updateTotals()});inp.addEventListener('focus',()=>inp.select())});updateTotals()}
-function updateTotals(){if(!nightDraft)return;let valid=0,total=0;for(const g of nightDraft.games)for(const b of g.bowlers){
+function updateTotals(){if(!nightDraft)return;protectDrafts();renderReviewChecklist();let valid=0,total=0;for(const g of nightDraft.games)for(const b of g.bowlers){
  total++;const score=entryScore(b),key=g.game+':'+b.bowlerId,input=$('[data-total="'+key+'"]'),note=$('[data-total-note="'+key+'"]');
  if(input){input.disabled=!!b.absent;if(document.activeElement!==input)input.value=b.absent?'':b.totalOnly?(b.manualTotal??b.score??''):(score??'');input.setAttribute('aria-invalid',String(!b.absent&&score===null&&!!b.totalOnly));}
  if(note){const handicap=isPractice()?null:bowlerHandicap(b.bowlerId);note.textContent=(b.absent?'ABS':b.totalOnly?(score===null?'Enter 0–300':'Total only'):'From frames, or enter a total')+(handicap&&score!==null&&!b.absent?' · Hcp '+(score+handicap.pins)+' (+'+handicap.pins+')':'')+(verificationText(b)?' · '+verificationText(b):'');note.classList.toggle('verification-mismatch',verificationMismatch(b));}if(input)input.classList.toggle('total-mismatch',verificationMismatch(b));
  if(b.absent||score!==null)valid++;
  }if(isPractice()){$('#nightValidation').textContent='Save 1–3 practice games. Leave unused games blank. Practice scores stay separate from league statistics.';return}$('#nightValidation').textContent=valid+' of '+total+' games complete, total only, or ABS. Total-only games exclude frame statistics.'}
 function saveNight(){if(isPractice())return savePractice();const t=currentTeam();if(!t||!nightDraft)return toast('Select a team');const mismatches=nightDraft.games.flatMap(g=>g.bowlers.filter(verificationMismatch).map(b=>b.name+' G'+g.game));if(mismatches.length&&!confirm('Calculated scores differ from the scanned scoreboard total for '+mismatches.join(', ')+'. Save the entered frames anyway?'))return;const entries=[];for(const g of nightDraft.games){for(const b of g.bowlers){const score=entryScore(b);if(!b.absent&&score==null)return toast(`Finish or correct Game ${g.game} for ${b.name}`);entries.push(savedEntry(b,g.game))}}
+  if(!isValidNightDate($('#nightDate').value))return toast('Choose a valid league night date');if(!confirmDuplicate(t.nights,$('#nightDate').value,entries))return;
   t.nights.push({id:uid(),date:$('#nightDate').value||localToday(),createdAt:new Date().toISOString(),entries});t.nights.sort((a,b)=>a.date.localeCompare(b.date));nightDraft=newSessionDraft(t);clearScanReview();persist();toast(bestNightNotice(t,t.nights.find(n=>n.entries===entries))||'League night saved')}
 function statsArePractice(){return state.selected.statsSource==='practice'}
 function statsSourceLabel(){return statsArePractice()?'Practice Sessions':'League Nights'}
@@ -527,7 +585,9 @@ function readDigitalGrid(data,w,h,adjusted=false,expectedRows=0){
  return rows;
 }
 function renderOcrReview(rows,grid){
- rows.forEach((r,i)=>{r.frames=Array.from({length:10},(_,i)=>r.frames?.[i]||'');r.uncertain=Array.from({length:10},(_,f)=>r.uncertain?.[f]??(!grid||parseFrame(r.frames[f],f)===null));const team=currentTeam(),order=isPractice()?null:team.ocrOrder;const remembered=order?.length===rows.length&&new Set(order).size===order.length&&order.every(id=>team.bowlers.some(b=>b.id===id));if(isPractice()&&!r.bowlerId&&rows.length===1)r.bowlerId=practiceBowler()?.id||'';if(grid&&!r.bowlerId&&!isPractice()){if(remembered)r.bowlerId=order[i];else if(rows.length===team.bowlers.length)r.bowlerId=team.bowlers[i].id;}});
+ const preferred=isPractice()?currentTeam()?.practiceRows?.[practiceBowler()?.id]||0:0;
+ if(isPractice()&&grid&&preferred&&rows.every(r=>!r.bowlerId)){rows.forEach((r,i)=>r.bowlerId=i===preferred-1?practiceBowler()?.id:'__skip__');if(preferred>rows.length)toast('Your saved row '+preferred+' was not detected. Choose your row before recording scores.');}
+ rows.forEach((r,i)=>{r.frames=Array.from({length:10},(_,i)=>r.frames?.[i]||'');r.uncertain=Array.from({length:10},(_,f)=>r.uncertain?.[f]??(!grid||parseFrame(r.frames[f],f)===null));const team=currentTeam(),order=isPractice()?null:team.ocrOrder;const remembered=order?.length===rows.length&&new Set(order).size===order.length&&order.every(id=>team.bowlers.some(b=>b.id===id));if(isPractice()&&!r.bowlerId&&rows.length===1&&!preferred)r.bowlerId=practiceBowler()?.id||'';if(grid&&!r.bowlerId&&!isPractice()){if(remembered)r.bowlerId=order[i];else if(rows.length===team.bowlers.length)r.bowlerId=team.bowlers[i].id;}});
  $('#ocrDetected').innerHTML=rows.map((r,i)=>'<div class="game-block"><strong>'+esc(r.name)+'</strong>'+
  '<label>Bowler<select data-ocr-row="'+i+'"><option value="">Choose bowler for this row</option><option value="__skip__" '+(r.bowlerId==='__skip__'?'selected':'')+'>Skip this bowler</option>'+sessionRoster().map(b=>'<option value="'+esc(b.id)+'" '+(r.bowlerId===b.id?'selected':'')+'>'+esc(b.name)+'</option>').join('')+'</select></label>'+
  '<div data-ocr-row-details="'+i+'"><label class="small"><input type="checkbox" data-ocr-absent="'+i+'" '+(r.absent?'checked':'')+'> Absent (ABS) — no played score</label><p class="muted small">'+esc(r.line)+'</p><details class="ocr-frame-details"><summary>Detected frame marks</summary><div class="row wrap">'+r.frames.map((f,fi)=>'<label>Frame '+(fi+1)+'<input data-ocr-frame="'+i+':'+fi+'" value="'+esc(f)+'" maxlength="4" aria-label="'+esc(r.name)+', frame '+(fi+1)+'" style="width:65px"></label>').join('')+'</div></details><p class="small" data-ocr-feedback="'+i+'" role="status"></p></div></div>').join('');
@@ -749,7 +809,7 @@ async function shareBowlerPdf(){
 }
 
 function exportBackup(){const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`bowling-tracker-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(a.href)}
-function importBackup(){const f=$('#importFile').files[0];if(!f)return toast('Choose a backup file');const reader=new FileReader();reader.onload=()=>{try{const data=JSON.parse(reader.result);if(!data.seasons)throw new Error('Invalid');if(confirm('Replace current bowling data with this backup?')){state=data;nightDraft=null;sessionDrafts.clear();persist();toast('Backup imported')}}catch{toast('That file is not a valid bowling backup')}};reader.readAsText(f)}
+function importBackup(){const f=$('#importFile').files[0];if(!f)return toast('Choose a backup file');const reader=new FileReader();reader.onload=()=>{try{const data=JSON.parse(reader.result);if(!data.seasons)throw new Error('Invalid');if(confirm('Replace current bowling data with this backup?')){state=data;localStorage.removeItem(activeStoreKey+'.drafts.v1');nightDraft=null;sessionDrafts.clear();persist();toast('Backup imported')}}catch{toast('That file is not a valid bowling backup')}};reader.readAsText(f)}
 function openScoreGame(game){$('#scoreSheetPanel').open=true;$$('[data-score-game]').forEach(panel=>panel.open=+panel.dataset.scoreGame===+game)}
 function clearNight(){const t=currentTeam();if(!t)return;if(confirm('Clear the current unsaved score sheet?')){nightDraft=newSessionDraft(t);clearScanReview();renderScoreSheet()}}
 function renderNightHeader(){if(!currentTeam())$('#sessionSettings').open=true;const s=currentSeason(),l=currentLeague(),t=currentTeam();$('#nightSelection').textContent=t?`${s.name} · ${l.name} · ${t.name}`:'Choose a league and team'}
@@ -766,6 +826,7 @@ function savePractice(){
  }
  if(!entries.length)return toast('Scan or enter at least one practice game');
  if(nightDraft.games.some(g=>g.bowlers.some(verificationMismatch))&&!confirm('A practice score differs from the photographed total. Save the entered frames anyway?'))return;
+ if(!confirmDuplicate(t.practiceSessions||[],date,entries))return;
  (t.practiceSessions??=[]).push({id:uid(),practice:true,date,createdAt:new Date().toISOString(),entries});
  nightDraft=newSessionDraft(t);nightDraft.date=date;clearScanReview();persist();toast(entries.length+' practice game'+(entries.length===1?'':'s')+' saved');
 }
@@ -788,7 +849,7 @@ let scanFiles=[], scanResults=new Map(), scanSources=new Map(), scanUndo=null, s
 const cloneData=value=>JSON.parse(JSON.stringify(value));
 function assertScanActive(token){if(token&&(token.cancelled||token.store!==activeStoreKey||token.teamId!==currentTeam()?.id||token.draft!==nightDraft))throw new Error('SCAN_CANCELLED')}
 function cancelScan(){if(!scanSession)return;scanSession.cancelled=true;scanSession.cancelPending?.();scanSession.gridWorker?.terminate();scanSession.textWorker?.terminate().catch(()=>{});$('#ocrStatus').textContent='Cancelling scan…'}
-function setScanBusy(busy){for(const id of ['runOcrBtn','scoreboardImage','ocrMode','ocrGame','saveNightBtn','clearNightBtn','sessionType','practiceBowler','scoreboardRowCount'])$('#'+id).disabled=busy;$$('[data-scan-file]').forEach(el=>el.disabled=busy);$('#cancelScanBtn').classList.toggle('hidden',!busy);$('#ocrProgress').classList.toggle('hidden',!busy);$('#undoScanBtn').disabled=busy||!scanUndo||scanUndo.store!==activeStoreKey||scanUndo.teamId!==currentTeam()?.id;$('#undoScanBtn').classList.toggle('hidden',!scanUndo);if(!busy)$('#runOcrBtn').disabled=!scanFiles.length;}
+function setScanBusy(busy){for(const id of ['runOcrBtn','scoreboardImage','ocrMode','ocrGame','saveNightBtn','clearNightBtn','sessionType','practiceBowler','practiceRow','scoreboardRowCount'])$('#'+id).disabled=busy;$$('[data-scan-file]').forEach(el=>el.disabled=busy);$('#cancelScanBtn').classList.toggle('hidden',!busy);$('#ocrProgress').classList.toggle('hidden',!busy);$('#undoScanBtn').disabled=busy||!scanUndo||scanUndo.store!==activeStoreKey||scanUndo.teamId!==currentTeam()?.id;$('#undoScanBtn').classList.toggle('hidden',!scanUndo);if(!busy)$('#runOcrBtn').disabled=!scanFiles.length;}
 function selectScanFiles(){
  if(scanSession)return;
  const files=[...$('#scoreboardImage').files];$('#runOcrBtn').disabled=!files.length||files.length>3;$('#singleGameLabel').classList.toggle('hidden',files.length>1);$('#scanFileList').classList.toggle('hidden',files.length<2);if(files.length>3){$('#scoreboardImage').value='';scanFiles=[];$('#scanFileList').innerHTML='';toast('Choose up to three photos at a time.');return}
@@ -808,7 +869,7 @@ function verificationMismatch(b){return !b.absent&&!b.totalOnly&&b.ocrDisplayedT
 async function openFrameReview(game,bowlerId,frame){
  const b=nightDraft?.games.find(g=>g.game===game)?.bowlers.find(b=>b.bowlerId===bowlerId);if(!b)return;
  frameReview={draft:nightDraft,game,bowlerId,frame};$('#frameReviewTitle').textContent=b.name+' · Game '+game+' · Frame '+(frame+1);$('#frameReviewInput').value=b.frames[frame]||'';$('#frameReviewStatus').textContent='';$('#frameReviewPhoto').classList.add('hidden');$('#frameReviewNoPhoto').textContent='';$('#frameReviewDialog').showModal();
- const source=scanSources.get(b.ocrSourceId),bounds=b.ocrFrameCrops?.[frame];if(!source){$('#frameReviewNoPhoto').textContent='No scan photo is available for this frame.';return}
+ const source=scanSources.get(b.ocrSourceId),bounds=b.ocrFrameCrops?.[frame];if(!source){$('#frameReviewNoPhoto').textContent='The draft was restored without its photo. Upload and scan the original photo again, or correct the frame from your records.';return}
  try{const img=new Image();await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=reject;img.src=source.url});if(frameReview?.draft!==nightDraft||frameReview?.frame!==frame||frameReview?.bowlerId!==bowlerId)return;const canvas=$('#frameReviewPhoto'),ctx=canvas.getContext('2d');const crop=bounds||{x:0,y:0,w:1,h:1};const x=Math.max(0,crop.x),y=Math.max(0,crop.y),w=Math.min(crop.w,1-x),h=Math.min(crop.h,1-y);canvas.width=800;canvas.height=Math.min(600,Math.max(180,Math.round(800*h*img.naturalHeight/(w*img.naturalWidth))));ctx.drawImage(img,x*img.naturalWidth,y*img.naturalHeight,w*img.naturalWidth,h*img.naturalHeight,0,0,canvas.width,canvas.height);canvas.classList.remove('hidden');if(!bounds)$('#frameReviewNoPhoto').textContent='Standard OCR: full photo shown. Locate the selected frame.';}catch{$('#frameReviewNoPhoto').textContent='The scan photo could not be opened.';}
 }
 function saveFrameReview(){if(!frameReview||frameReview.draft!==nightDraft)return;const {game,bowlerId,frame}=frameReview,mark=normalizeFrame($('#frameReviewInput').value);if(parseFrame(mark,frame)===null){$('#frameReviewStatus').textContent='Enter a valid frame mark, such as 9/, 8-, or X. The tenth frame may need a bonus roll.';return}const b=nightDraft.games.find(g=>g.game===game)?.bowlers.find(b=>b.bowlerId===bowlerId);if(!b)return;b.totalOnly=false;delete b.manualTotal;b.frames[frame]=mark;b.ocrUncertain??=Array(10).fill(false);b.ocrUncertain[frame]=false;updateOcrFromScoreSheet(b,game,frame);$('#frameReviewDialog').close();frameReview=null;renderScoreSheet()}
@@ -839,7 +900,8 @@ function nightReportModel(nightId){
  const night={...original,entries:original.entries.map(e=>({...e,score:statisticsScore(e)}))},teamStats=statsForTeam({nights:[night]});
  const people=[...new Set(night.entries.map(e=>e.bowlerId))].map(id=>{
   const entries=night.entries.filter(e=>e.bowlerId===id),st=statsForTeam({nights:[night]},id),games=[1,2,3].map(g=>entries.find(e=>e.game===g));
-  return {id,name:entries[0]?.name||'Bowler',games,stats:st,absent:entries.every(e=>e.absent),absentGames:entries.filter(e=>e.absent).length,
+  const prior=team.nights.filter(n=>n.date<night.date).flatMap(n=>n.entries).filter(e=>e.bowlerId===id).map(statisticsScore).filter(Number.isFinite),priorAverage=prior.length?prior.reduce((a,b)=>a+b,0)/prior.length:null;
+  return {priorAverage,averageChange:priorAverage!==null&&st.avg!==null?st.avg-priorAverage:null,id,name:entries[0]?.name||'Bowler',games,stats:st,absent:entries.every(e=>e.absent),absentGames:entries.filter(e=>e.absent).length,
    handicapTotal:st.entries.length&&st.entries.every(e=>Number.isFinite(e.handicap))?st.entries.reduce((sum,e)=>sum+e.score+e.handicap,0):null};
  });
  return {nightId,store:activeStoreKey,teamId:team.id,snapshot:JSON.stringify(original),date:night.date,season:currentSeason().name,league:currentLeague().name,team:team.name,people,stats:teamStats,
@@ -866,12 +928,12 @@ async function renderNightReportPages(model){
   c.fillStyle='#087978';c.fillRect(M,y,bodyW,46);let x=M;headers.forEach((h,i)=>{text(h,x+(i?widths[i]/2:14),y+30,18,'#ffffff',true,i?'center':'left');x+=widths[i]});y+=46;
   const players=model.people.slice(page*perPage,(page+1)*perPage);
   for(const [index,p] of players.entries()){
-   const rowHeight=110;c.fillStyle=p.absent?'#eee8dd':index%2?'#eaf3ed':'#fffdf7';c.fillRect(M,y,bodyW,rowHeight);c.strokeStyle='#dccbb2';c.strokeRect(M,y,bodyW,rowHeight);
+   const rowHeight=120;c.fillStyle=p.absent?'#eee8dd':index%2?'#eaf3ed':'#fffdf7';c.fillRect(M,y,bodyW,rowHeight);c.strokeStyle='#dccbb2';c.strokeRect(M,y,bodyW,rowHeight);
    let nameSize=23;const maxName=widths[0]-28;c.font='700 '+nameSize+'px Arial';while(nameSize>14&&c.measureText(p.name).width>maxName){nameSize--;c.font='700 '+nameSize+'px Arial'}c.fillStyle='#452f58';c.textAlign='left';c.fillText(p.name,M+14,y+34,maxName);
    const values=[...p.games.map(e=>e?.absent?'ABS':e?.score??'-'),p.stats.highSeries??'-',p.stats.avg===null?'-':p.stats.avg.toFixed(1),p.stats.high??'-'];x=M+widths[0];values.forEach((value,i)=>{text(value,x+widths[i+1]/2,y+34,23,'#452f58',true,'center');x+=widths[i+1]});
    let detail=p.absent?'Absent (ABS) - not included in statistics':p.stats.frames?p.stats.games+' played | Strikes '+p.stats.strikes+' | Spares '+p.stats.spares+' | Open frames '+p.stats.opens:p.stats.games+' played | Frame stats unavailable';
    if(p.absentGames&&!p.absent)detail+=' | '+p.absentGames+' ABS';if(p.handicapTotal!==null)detail+=' | Hcp total '+p.handicapTotal;
-   wrapped(detail,M+14,y+72,bodyW-28,16);y+=rowHeight;
+   wrapped(detail,M+14,y+66,bodyW-28,16);text(nightAverageComparison(p),M+14,y+108,16,'#087978');y+=rowHeight;
   }
   if(!players.length){text('No bowler scores recorded for this night.',M+14,y+40,23);y+=70;}
   y+=32;y+=wrapped(model.stats.frames?'Recorded-frame totals: '+model.stats.strikes+' strikes | '+model.stats.spares+' spares | '+model.stats.opens+' open frames.':'Frame stats unavailable: no frames recorded for played games.',M,y,bodyW,21);
@@ -890,12 +952,30 @@ function nightReportFilename(model,extension){const safe=String(model.team).norm
 function createNightReportPdf(view=nightReportView){
  if(!window.jspdf?.jsPDF)throw Error('PDF tools have not loaded. Reload and try again.');if(!view?.pages?.length)throw Error('Wait for the report to finish loading.');const doc=new window.jspdf.jsPDF({unit:'pt',format:'letter',compress:true});view.pages.forEach((canvas,i)=>{if(i)doc.addPage();doc.addImage(canvas.toDataURL('image/jpeg',.94),'JPEG',0,0,612,792,undefined,'FAST')});doc.setProperties({title:'League Night Stats - '+view.model.date,subject:view.model.team+' - one saved league night',author:'StrikeScan'});return doc;
 }
+function nightAverageComparison(p){
+ if(p.absent||!p.stats.games)return 'No played games for comparison.';
+ return p.priorAverage===null?'No earlier league games for comparison.':'Night avg '+(p.averageChange>=0?'+':'')+p.averageChange.toFixed(1)+' vs prior league avg '+p.priorAverage.toFixed(1);
+}
+async function nightReportCard(view){
+ const m=view.model,people=m.people.filter(p=>p.stats.games>0),others=m.people.filter(p=>!p.stats.games),W=1080,H=450+people.length*220+others.length*46;
+ const scale=Math.min(1,8192/H,Math.sqrt(12000000/(W*H))),canvas=document.createElement('canvas');canvas.width=Math.round(W*scale);canvas.height=Math.round(H*scale);const c=canvas.getContext('2d');if(!c)throw Error('Could not create sharing card.');c.scale(scale,scale);c.fillStyle='#fff9ee';c.fillRect(0,0,W,H);
+ const text=(value,x,y,size=28,color='#452f58',bold=false,max=W-96)=>{c.fillStyle=color;c.font=(bold?'700 ':'')+size+'px Arial';c.fillText(String(value),x,y,max)};
+ c.fillStyle='#087978';c.fillRect(0,0,W,190);text('STRIKESCAN · NIGHT STATS',48,64,28,'#ffdf8d',true);text(formatDate(m.date),48,124,48,'white',true);text(m.team,48,166,28,'white');
+ text(m.league+' · '+m.season,48,235,25);text(m.played+' bowlers · '+m.stats.games+' games · '+m.scratchTotal+' team scratch',48,282,29,'#087978',true);
+ let y=320;for(const p of people){c.fillStyle='#e5efe6';c.fillRect(32,y,W-64,196);text(p.name,52,y+40,34,'#452f58',true);
+ text(p.games.map((e,i)=>'G'+(i+1)+': '+(e?.absent?'ABS':e?.score??'—')).join('     '),52,y+84,32);
+ text('Series '+(p.stats.highSeries??'—')+'     High '+p.stats.high+'     Avg '+p.stats.avg.toFixed(1),52,y+128,30,'#087978',true);
+ text(nightAverageComparison(p),52,y+170,24);y+=220;}
+ for(const p of others){text(p.name+': '+(p.absent?'ABS':'No played games')+' · excluded',48,y+30,25);y+=46}
+ text('One league night · ABS excluded · Scratch scores',48,H-38,23);
+ return new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(Error('Could not create sharing card.')),'image/png'));
+}
 async function nightReportPng(view=nightReportView){
  if(!view?.pages?.length)throw Error('Wait for the report to finish loading.');const count=view.pages.length,scale=Math.min(1.5,Math.sqrt(12000000/(1200*(2330/1.5)*count)),8192/((2330/1.5)*count)),canvas=document.createElement('canvas');canvas.width=Math.round(1200*scale);const height=Math.round((2330/1.5)*scale);canvas.height=height*count;const c=canvas.getContext('2d');if(!c)throw Error('The picture is too large to create on this device. Use PDF instead.');view.pages.forEach((page,i)=>c.drawImage(page,0,i*height,canvas.width,height));return new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(Error('Could not create the picture. Use PDF instead.')),'image/png'));
 }
 async function exportNightReport(format,share=false){
  if(!nightReportStillCurrent()){closeNightReport();return toast('Saved scores changed. Reopen Night Stats to load the latest report.')}
- const view=nightReportView;try{setNightReportBusy(true);const blob=format==='pdf'?createNightReportPdf(view).output('blob'):await nightReportPng(view);if(nightReportView!==view||!nightReportStillCurrent())return;const file=new File([blob],nightReportFilename(view.model,format),{type:format==='pdf'?'application/pdf':'image/png'});
+ const view=nightReportView;try{setNightReportBusy(true);const blob=format==='pdf'?createNightReportPdf(view).output('blob'):format==='card'?await nightReportCard(view):await nightReportPng(view);if(nightReportView!==view||!nightReportStillCurrent())return;const file=new File([blob],nightReportFilename(view.model,format==='card'?'png':format).replace('-Night-Stats.',format==='card'?'-Compact-Card.':'-Night-Stats.'),{type:format==='pdf'?'application/pdf':'image/png'});
   if(share&&navigator.canShare?.({files:[file]})&&navigator.share)await navigator.share({files:[file],title:'League night stats - '+formatDate(view.model.date)});
   else{const url=URL.createObjectURL(file),a=document.createElement('a');a.href=url;a.download=file.name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);toast(share?'Report downloaded - attach it to your message.':format==='pdf'?'Night PDF downloaded':'Night picture downloaded')}
  }catch(e){if(e.name!=='AbortError')toast(e.message||'Could not export this report.')}finally{if(nightReportView===view)setNightReportBusy(false)}
@@ -913,6 +993,10 @@ $('#ocrGame').onchange=()=>{if(scanFiles.length===1){scanFiles[0].game=+$('#ocrG
 $('#cancelScanBtn').onclick=cancelScan;$('#undoScanBtn').onclick=undoLastScan;$('#ocrReviewGame').onchange=()=>chooseScanReview($('#ocrReviewGame').value);$('#rememberOrderBtn').onclick=rememberBowlerOrder;$('#handicapForm').onsubmit=saveHandicapSettings;$('#saveFrameReview').onclick=saveFrameReview;$('#closeFrameReview').onclick=()=>{$('#frameReviewDialog').close();frameReview=null};$('#frameReviewDialog').addEventListener('cancel',()=>frameReview=null);
 $('#saveScoreChanges').onclick=saveScoreChanges;$('#cancelScoreChanges').onclick=()=>closeSavedScoreEditor();$('#savedScoreDialog').addEventListener('cancel',event=>{event.preventDefault();closeSavedScoreEditor()});
 $('#nightDate').value=localToday();
+$('#nightDate').addEventListener('input',protectDrafts);$('#nightDate').addEventListener('change',protectDrafts);
+$('#reviewNextBtn').onclick=reviewNext;
+$('#practiceRow').onchange=()=>{const team=currentTeam(),b=practiceBowler();if(!team||!b)return;(team.practiceRows??={})[b.id]=+$('#practiceRow').value;persist()};
+$('#saveSyncStatus').onclick=()=>showView('cloud');window.addEventListener('bowling-sync-status',renderSaveSyncStatus);window.addEventListener('pagehide',protectDrafts);document.addEventListener('visibilitychange',()=>{if(document.hidden)protectDrafts()});
 $('#sessionType').onchange=changeSession;$('#practiceBowler').onchange=changeSession;$('#practiceHistoryBowler').onchange=renderPracticeHistory;
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;$('#installBtn').classList.remove('hidden')});$('#installBtn').onclick=async()=>{if(deferredPrompt){deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null;$('#installBtn').classList.add('hidden')}};
 if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
@@ -920,14 +1004,15 @@ window.bowlingCloud={
  payload:()=>JSON.stringify({version:1,seasons:state.seasons}),
  hasDraft:()=>[...sessionDrafts.values()].some(d=>d.games.some(g=>g.bowlers.some(b=>b.absent||b.totalOnly||b.frames.some(Boolean))))||!!savedScoreEdit||!!nightDraft?.games.some(g=>g.bowlers.some(b=>b.absent||b.totalOnly||b.frames.some(Boolean))),
  local:()=>JSON.parse(localStorage.getItem(STORE_KEY)||JSON.stringify(blankState())),
- scope:userId=>{activeStoreKey=userId?STORE_KEY+'.account.'+userId:STORE_KEY;try{const accountData=localStorage.getItem(activeStoreKey);const originalData=localStorage.getItem(STORE_KEY);const original=originalData?JSON.parse(originalData):null;state=accountData?JSON.parse(accountData):(userId&&Array.isArray(original?.seasons)&&original.seasons.length?cloneData(original):blankState());if(!Array.isArray(state?.seasons))state=blankState();if(!state.selected)state.selected=blankState().selected;}catch{state=blankState()}nightDraft=null;sessionDrafts.clear();renderAll()},
- replace:payload=>{const data=JSON.parse(payload);if(!Array.isArray(data.seasons))throw Error('Invalid cloud data');state={version:1,seasons:data.seasons,selected:state.selected||blankState().selected};nightDraft=null;sessionDrafts.clear();localStorage.setItem(activeStoreKey,JSON.stringify(state));renderAll()},
+ scope:userId=>{protectDrafts();activeStoreKey=userId?STORE_KEY+'.account.'+userId:STORE_KEY;try{const accountData=localStorage.getItem(activeStoreKey);const originalData=localStorage.getItem(STORE_KEY);const original=originalData?JSON.parse(originalData):null;state=accountData?JSON.parse(accountData):(userId&&Array.isArray(original?.seasons)&&original.seasons.length?cloneData(original):blankState());if(!Array.isArray(state?.seasons))state=blankState();if(!state.selected)state.selected=blankState().selected;}catch{state=blankState()}nightDraft=null;sessionDrafts.clear();restoreDrafts();renderAll()},
+ replace:payload=>{localStorage.removeItem(activeStoreKey+'.drafts.v1');const data=JSON.parse(payload);if(!Array.isArray(data.seasons))throw Error('Invalid cloud data');state={version:1,seasons:data.seasons,selected:state.selected||blankState().selected};nightDraft=null;sessionDrafts.clear();localStorage.setItem(activeStoreKey,JSON.stringify(state));renderAll()},
  backup:()=>{localStorage.setItem(activeStoreKey+'.beforeCloudReplace',JSON.stringify(state));exportBackup()}
 };
-renderAll();
+restoreDrafts();renderAll();renderSaveSyncStatus();
 
 
 let progressResizeTimer;window.addEventListener('resize',()=>{clearTimeout(progressResizeTimer);progressResizeTimer=setTimeout(renderBowlerProgress,120)});
+
 
 
 

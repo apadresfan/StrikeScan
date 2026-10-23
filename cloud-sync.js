@@ -10,7 +10,11 @@ let meta={revision:0,baseline:null};
 const metaKey=()=> 'strikescan.cloud.'+user.uid;
 const dirty=()=>bridge.payload()!==meta.baseline;
 function saveMeta(){if(user)localStorage.setItem(metaKey(),JSON.stringify(meta))}
-function status(message){el('cloudStatus').textContent=message}
+function status(message,attention=false){
+ el('cloudStatus').textContent=message;
+ const state=!user?'device':!navigator.onLine?'offline':attention||!el('cloudConflict').classList.contains('hidden')?'attention':!received?'connecting':remote?.payload===bridge.payload()&&remote?.revision===meta.revision&&!dirty()?'synced':busy?'syncing':dirty()?'pending':'connecting';
+ window.bowlingSyncStatus={state,message};window.dispatchEvent(new Event('bowling-sync-status'));
+}
 function conflict(show){el('cloudConflict').classList.toggle('hidden',!show)}
 function errorMessage(error){
  const code=error.code||'';
@@ -41,7 +45,7 @@ function reconcile(){
   conflict(true);status('Another device has newer scores. Choose which copy to keep below.');return;
  }
  try{bridge.replace(remote.payload);meta={revision:remote.revision,baseline:remote.payload};saveMeta();conflict(false);status('Latest scores downloaded from the cloud.');}
- catch(error){status(errorMessage(error))}
+ catch(error){status(errorMessage(error),true)}
 }
 function listen(){
  if(unsubscribe)unsubscribe();received=false;remote=null;
@@ -49,9 +53,9 @@ function listen(){
  unsubscribe=onSnapshot(doc(db,'users',user.uid,'bowling','state'),{includeMetadataChanges:true},snapshot=>{
   if(generation!==epoch||snapshot.metadata.fromCache)return;
   received=true;remote=snapshot.exists()?snapshot.data():null;reconcile();
- },error=>{if(generation===epoch)status(errorMessage(error))});
+ },error=>{if(generation===epoch)status(errorMessage(error),true)});
 }
-function schedule(){clearTimeout(timer);timer=setTimeout(()=>sync(),700)}
+function schedule(){status('Saved on this device. Waiting to sync.');clearTimeout(timer);timer=setTimeout(()=>sync(),700)}
 async function sync(){
  if(!user)return status('Sign in to sync your saved games.');
  if(!navigator.onLine)return status('Offline. Saved changes will sync when you reconnect.');
@@ -75,28 +79,28 @@ async function sync(){
  }catch(error){
   if(generation!==epoch)return;
   if(error.code==='sync/conflict'){conflict(true);status('Another device saved scores first. Choose a copy below.');listen();}
-  else status(errorMessage(error));
+  else status(errorMessage(error),true);
  }finally{if(generation===epoch){busy=false;if(remote&&remote.revision!==meta.revision)reconcile();else if(dirty()&&navigator.onLine&&meta.baseline===payload)schedule();}}
 }
 async function authenticate(create){
- if(bridge.hasDraft()&&!confirm('Signing in changes scorebooks. Discard the unfinished score sheet?'))return;
+ if(bridge.hasDraft()&&!confirm('Signing in changes scorebooks. Your unfinished score sheet stays on this device. Continue?'))return;
  const email=el('cloudEmail').value.trim(),password=el('cloudPassword').value;
  if(!email||!password)return status('Enter your email and password.');
  el('cloudSignIn').disabled=el('cloudCreateAccount').disabled=true;status(create?'Creating your account…':'Signing in…');
  try{await (create?createUserWithEmailAndPassword:signInWithEmailAndPassword)(auth,email,password);el('cloudPassword').value='';}
- catch(error){status(errorMessage(error))}
+ catch(error){status(errorMessage(error),true)}
  finally{el('cloudSignIn').disabled=el('cloudCreateAccount').disabled=false}
 }
 el('cloudSignIn').onclick=()=>authenticate(false);
 el('cloudCreateAccount').onclick=()=>authenticate(true);
 el('cloudResetPassword').onclick=async()=>{
  const email=el('cloudEmail').value.trim();if(!email)return status('Enter your email first.');
- try{await sendPasswordResetEmail(auth,email);status('Password reset requested. Check your email.')}catch(error){status(errorMessage(error))}
+ try{await sendPasswordResetEmail(auth,email);status('Password reset requested. Check your email.')}catch(error){status(errorMessage(error),true)}
 };
 el('cloudSignOut').onclick=async()=>{
  if(busy)return status('Wait for syncing to finish before signing out.');
  if((dirty()||bridge.hasDraft())&&!confirm('Some changes are not synced. They stay on this device. Sign out anyway?'))return;
- try{await signOut(auth)}catch(error){status(errorMessage(error))}
+ try{await signOut(auth)}catch(error){status(errorMessage(error),true)}
 };
 el('cloudSyncNow').onclick=()=>{if(!received)listen();else sync()};
 el('cloudUploadLocal').onclick=()=>{
@@ -131,3 +135,4 @@ onAuthStateChanged(auth,next=>{
  try{meta=JSON.parse(localStorage.getItem(metaKey()))||{revision:0,baseline:null}}catch{meta={revision:0,baseline:null}}
  status('Connecting to your cloud scores…');listen();
 });
+
