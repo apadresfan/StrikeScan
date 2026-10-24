@@ -64,14 +64,15 @@ function newSessionDraft(team){const roster=sessionRoster();return {teamId:team.
 function draftKey(d){return [activeStoreKey,d.teamId,d.practice?'practice':'league',d.practiceBowlerId||''].join(':')}
 
 function draftHasScores(d){return !!d?.games?.some(g=>g.bowlers?.some(b=>b.absent||b.totalOnly||b.frames?.some(Boolean)))}
+function draftStatus(message){const el=$('#draftSaveStatus');if(el)el.textContent=message}
 function protectDrafts(){
  try{
   if(nightDraft)nightDraft.date=$('#nightDate').value||nightDraft.date;
   const drafts=new Map(sessionDrafts);if(nightDraft)drafts.set(draftKey(nightDraft),nightDraft);
   const items=[...drafts].filter(([,d])=>draftHasScores(d));
   localStorage.setItem(activeStoreKey+'.drafts.v1',JSON.stringify({context:{...state.selected,practice:isPractice(),practiceBowlerId:practiceBowler()?.id},drafts:items}));
-  $('#draftSaveStatus').textContent=items.length?'Draft saved on this device. Save games to sync.':'';
- }catch{$('#draftSaveStatus').textContent='Draft could not be saved on this device. Keep this page open until you save your games.'}
+  draftStatus(items.length?'Draft saved on this device. Save games to sync.':'');
+ }catch{draftStatus('Draft could not be saved on this device. Keep this page open until you save your games.')}
 }
 function restoreDrafts(){
  try{
@@ -96,6 +97,7 @@ function reviewItems(){
  }));
 }
 function renderReviewChecklist(){
+ if(!$('#reviewChecklist')||!$('#reviewCount'))return;
  const items=reviewItems(),frames=items.filter(x=>x.frame!==null).length,mismatches=items.length-frames;
  $('#reviewChecklist').classList.toggle('hidden',!items.length);
  $('#reviewCount').textContent=frames+' uncertain frame'+(frames===1?'':'s')+(mismatches?' · '+mismatches+' total mismatch'+(mismatches===1?'':'es'):'');
@@ -110,10 +112,12 @@ function confirmDuplicate(sessions,date,entries){
  return !sessions.some(n=>n.date===date&&duplicateEntries(n.entries)===duplicateEntries(entries))||confirm('These same scores are already saved for '+formatDate(date)+'. Save another copy anyway?');
 }
 function renderPracticeRow(){
+ if(!$('#practiceRowLabel')||!$('#practiceRow'))return;
  $('#practiceRowLabel').classList.toggle('hidden',!isPractice());
  $('#practiceRow').value=String(currentTeam()?.practiceRows?.[practiceBowler()?.id]||0);
 }
 function renderSaveSyncStatus(){
+ if(!$('#saveSyncStatus'))return;
  const s=window.bowlingSyncStatus||{state:'device',message:'Saved games are stored on this device. Sign in to sync.'};
  const labels={device:'Saved on device',connecting:'Connecting to cloud',pending:'Waiting to sync',syncing:'Syncing',synced:'Synced',offline:'Offline · saved on device',attention:'Sync needs attention'};
  $('#saveSyncStatus').textContent='Saved games: '+(labels[s.state]||labels.device);$('#saveSyncStatus').title=s.message;$('#saveSyncStatus').dataset.status=s.state;
@@ -172,6 +176,20 @@ function changeStatsSource(){
  else if(!statsForTeam(selectedStatsTeam(),state.selected.bowlerId).games)state.selected.bowlerId=null;
  persist();
 }
+function ensureInitialStatsSelection(){
+ // Selection is local to each device; cloud scorebooks contain seasons and games.
+ // Keep a valid selection, including an intentionally empty team.
+ if(currentTeam())return;
+ const source=statsArePractice()?'practice':'league',available=savedStatsSelections(source);
+ if(!available.length)return;
+ const remembered=state.selected.statsSelections?.[source];
+ const chosen=available.find(s=>s.seasonId===remembered?.seasonId&&s.leagueId===remembered?.leagueId&&s.teamId===remembered?.teamId)||available.map(s=>{
+  const team=currentTeam(s.seasonId,s.leagueId,s.teamId);
+  return {...s,lastDate:statsSessions(team,source).filter(n=>n.entries.some(e=>statisticsScore(e)!==null)).map(n=>n.date).sort().pop()||''};
+ }).sort((a,b)=>b.lastDate.localeCompare(a.lastDate)||b.games-a.games)[0];
+ Object.assign(state.selected,{seasonId:chosen.seasonId,leagueId:chosen.leagueId,teamId:chosen.teamId,bowlerId:null});
+}
+
 function renderStatsHelp(st){
  const root=$('#statsSelectionHelp');root.classList.toggle('hidden',st.games>0);if(st.games){root.innerHTML='';return}
  const team=currentTeam(),all=statsForTeam(selectedStatsTeam());
@@ -844,12 +862,12 @@ function renderPracticeHistory(){
  root.querySelectorAll('[data-practice-delete]').forEach(b=>b.onclick=()=>{if(confirm('Delete this practice session?')){t.practiceSessions=t.practiceSessions.filter(n=>n.id!==b.dataset.practiceDelete);persist();toast('Practice session deleted')}});
 }
 
-function showView(name){closeMobileNavigation();$('#navMoreBtn').classList.toggle('active',['setup','backup','cloud'].includes(name));$$('.tab').forEach(t=>{if(t.dataset.view===name)t.setAttribute('aria-current','page');else t.removeAttribute('aria-current')});document.body.classList.toggle('scan-view',name==='night');$$('.view').forEach(v=>v.classList.toggle('active',v.id===`view-${name}`));$$('.tab').forEach(t=>t.classList.toggle('active',t.dataset.view===name));window.scrollTo({top:0,behavior:'smooth'})}
+function showView(name){closeMobileNavigation();$('#navMoreBtn')?.classList.toggle('active',['setup','backup','cloud'].includes(name));$$('.tab').forEach(t=>{if(t.dataset.view===name)t.setAttribute('aria-current','page');else t.removeAttribute('aria-current')});document.body.classList.toggle('scan-view',name==='night');$$('.view').forEach(v=>v.classList.toggle('active',v.id===`view-${name}`));$$('.tab').forEach(t=>t.classList.toggle('active',t.dataset.view===name));window.scrollTo({top:0,behavior:'smooth'})}
 let scanFiles=[], scanResults=new Map(), scanSources=new Map(), scanUndo=null, scanSession=null, frameReview=null;
 const cloneData=value=>JSON.parse(JSON.stringify(value));
 function assertScanActive(token){if(token&&(token.cancelled||token.store!==activeStoreKey||token.teamId!==currentTeam()?.id||token.draft!==nightDraft))throw new Error('SCAN_CANCELLED')}
 function cancelScan(){if(!scanSession)return;scanSession.cancelled=true;scanSession.cancelPending?.();scanSession.gridWorker?.terminate();scanSession.textWorker?.terminate().catch(()=>{});$('#ocrStatus').textContent='Cancelling scan…'}
-function setScanBusy(busy){for(const id of ['runOcrBtn','scoreboardImage','ocrMode','ocrGame','saveNightBtn','clearNightBtn','sessionType','practiceBowler','practiceRow','scoreboardRowCount'])$('#'+id).disabled=busy;$$('[data-scan-file]').forEach(el=>el.disabled=busy);$('#cancelScanBtn').classList.toggle('hidden',!busy);$('#ocrProgress').classList.toggle('hidden',!busy);$('#undoScanBtn').disabled=busy||!scanUndo||scanUndo.store!==activeStoreKey||scanUndo.teamId!==currentTeam()?.id;$('#undoScanBtn').classList.toggle('hidden',!scanUndo);if(!busy)$('#runOcrBtn').disabled=!scanFiles.length;}
+function setScanBusy(busy){for(const id of ['runOcrBtn','scoreboardImage','ocrMode','ocrGame','saveNightBtn','clearNightBtn','sessionType','practiceBowler','practiceRow','scoreboardRowCount']){const control=$('#'+id);if(control)control.disabled=busy;}$$('[data-scan-file]').forEach(el=>el.disabled=busy);$('#cancelScanBtn').classList.toggle('hidden',!busy);$('#ocrProgress').classList.toggle('hidden',!busy);$('#undoScanBtn').disabled=busy||!scanUndo||scanUndo.store!==activeStoreKey||scanUndo.teamId!==currentTeam()?.id;$('#undoScanBtn').classList.toggle('hidden',!scanUndo);if(!busy)$('#runOcrBtn').disabled=!scanFiles.length;}
 function selectScanFiles(){
  if(scanSession)return;
  const files=[...$('#scoreboardImage').files];$('#runOcrBtn').disabled=!files.length||files.length>3;$('#singleGameLabel').classList.toggle('hidden',files.length>1);$('#scanFileList').classList.toggle('hidden',files.length<2);if(files.length>3){$('#scoreboardImage').value='';scanFiles=[];$('#scanFileList').innerHTML='';toast('Choose up to three photos at a time.');return}
@@ -994,9 +1012,9 @@ $('#cancelScanBtn').onclick=cancelScan;$('#undoScanBtn').onclick=undoLastScan;$(
 $('#saveScoreChanges').onclick=saveScoreChanges;$('#cancelScoreChanges').onclick=()=>closeSavedScoreEditor();$('#savedScoreDialog').addEventListener('cancel',event=>{event.preventDefault();closeSavedScoreEditor()});
 $('#nightDate').value=localToday();
 $('#nightDate').addEventListener('input',protectDrafts);$('#nightDate').addEventListener('change',protectDrafts);
-$('#reviewNextBtn').onclick=reviewNext;
-$('#practiceRow').onchange=()=>{const team=currentTeam(),b=practiceBowler();if(!team||!b)return;(team.practiceRows??={})[b.id]=+$('#practiceRow').value;persist()};
-$('#saveSyncStatus').onclick=()=>showView('cloud');window.addEventListener('bowling-sync-status',renderSaveSyncStatus);window.addEventListener('pagehide',protectDrafts);document.addEventListener('visibilitychange',()=>{if(document.hidden)protectDrafts()});
+$('#reviewNextBtn')?.addEventListener('click',reviewNext);
+$('#practiceRow')?.addEventListener('change',()=>{const team=currentTeam(),b=practiceBowler();if(!team||!b)return;(team.practiceRows??={})[b.id]=+$('#practiceRow').value;persist()});
+$('#saveSyncStatus')?.addEventListener('click',()=>showView('cloud'));window.addEventListener('bowling-sync-status',renderSaveSyncStatus);window.addEventListener('pagehide',protectDrafts);document.addEventListener('visibilitychange',()=>{if(document.hidden)protectDrafts()});
 $('#sessionType').onchange=changeSession;$('#practiceBowler').onchange=changeSession;$('#practiceHistoryBowler').onchange=renderPracticeHistory;
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;$('#installBtn').classList.remove('hidden')});$('#installBtn').onclick=async()=>{if(deferredPrompt){deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null;$('#installBtn').classList.add('hidden')}};
 if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
@@ -1004,36 +1022,37 @@ window.bowlingCloud={
  payload:()=>JSON.stringify({version:1,seasons:state.seasons}),
  hasDraft:()=>[...sessionDrafts.values()].some(d=>d.games.some(g=>g.bowlers.some(b=>b.absent||b.totalOnly||b.frames.some(Boolean))))||!!savedScoreEdit||!!nightDraft?.games.some(g=>g.bowlers.some(b=>b.absent||b.totalOnly||b.frames.some(Boolean))),
  local:()=>JSON.parse(localStorage.getItem(STORE_KEY)||JSON.stringify(blankState())),
- scope:userId=>{protectDrafts();activeStoreKey=userId?STORE_KEY+'.account.'+userId:STORE_KEY;try{const accountData=localStorage.getItem(activeStoreKey);const originalData=localStorage.getItem(STORE_KEY);const original=originalData?JSON.parse(originalData):null;state=accountData?JSON.parse(accountData):(userId&&Array.isArray(original?.seasons)&&original.seasons.length?cloneData(original):blankState());if(!Array.isArray(state?.seasons))state=blankState();if(!state.selected)state.selected=blankState().selected;}catch{state=blankState()}nightDraft=null;sessionDrafts.clear();restoreDrafts();renderAll()},
- replace:payload=>{localStorage.removeItem(activeStoreKey+'.drafts.v1');const data=JSON.parse(payload);if(!Array.isArray(data.seasons))throw Error('Invalid cloud data');state={version:1,seasons:data.seasons,selected:state.selected||blankState().selected};nightDraft=null;sessionDrafts.clear();localStorage.setItem(activeStoreKey,JSON.stringify(state));renderAll()},
+ scope:userId=>{protectDrafts();activeStoreKey=userId?STORE_KEY+'.account.'+userId:STORE_KEY;try{const accountData=localStorage.getItem(activeStoreKey);const originalData=localStorage.getItem(STORE_KEY);const original=originalData?JSON.parse(originalData):null;state=accountData?JSON.parse(accountData):(userId&&Array.isArray(original?.seasons)&&original.seasons.length?cloneData(original):blankState());if(!Array.isArray(state?.seasons))state=blankState();if(!state.selected)state.selected=blankState().selected;}catch{state=blankState()}nightDraft=null;sessionDrafts.clear();restoreDrafts();ensureInitialStatsSelection();renderAll()},
+ replace:payload=>{localStorage.removeItem(activeStoreKey+'.drafts.v1');const data=JSON.parse(payload);if(!Array.isArray(data.seasons))throw Error('Invalid cloud data');state={version:1,seasons:data.seasons,selected:state.selected||blankState().selected};nightDraft=null;sessionDrafts.clear();ensureInitialStatsSelection();localStorage.setItem(activeStoreKey,JSON.stringify(state));renderAll()},
  backup:()=>{localStorage.setItem(activeStoreKey+'.beforeCloudReplace',JSON.stringify(state));exportBackup()}
 };
 
 function closeMobileNavigation(restoreFocus=false){
- const button=$('#navMoreBtn'),open=button.getAttribute('aria-expanded')==='true';
+ const button=$('#navMoreBtn');if(!button)return;const open=button.getAttribute('aria-expanded')==='true';
  button.setAttribute('aria-expanded','false');if(open&&restoreFocus)button.focus();
 }
 function applyDeviceLayout(){
  const wide=matchMedia('(min-width:1024px)').matches;
  document.body.dataset.layout=wide?'desktop':matchMedia('(max-width:767px)').matches?'phone':'tablet';
  closeMobileNavigation();
- for(const id of ['dashboardContext','dashboardSharing','frameStatsPanel','personalBestPanel','progressPanel','sessionSettings','scanOptions','scoreSheetPanel'])$('#'+id).open=wide;
+ for(const id of ['dashboardContext','dashboardSharing','frameStatsPanel','personalBestPanel','progressPanel','sessionSettings','scanOptions','scoreSheetPanel']){const panel=$('#'+id);if(panel)panel.open=wide;}
  const panels=$$('[data-score-game]'),first=panels.find(p=>p.open)||panels[0];
  panels.forEach(panel=>panel.open=wide||panel===first);
  if(wide)requestAnimationFrame(renderBowlerProgress);
 }
-$('#navMoreBtn').onclick=()=>{const button=$('#navMoreBtn');button.setAttribute('aria-expanded',String(button.getAttribute('aria-expanded')!=='true'))};
+$('#navMoreBtn')?.addEventListener('click',()=>{const button=$('#navMoreBtn');button.setAttribute('aria-expanded',String(button.getAttribute('aria-expanded')!=='true'))});
 document.addEventListener('click',event=>{if(!event.target.closest('.nav-more'))closeMobileNavigation()});
 document.addEventListener('keydown',event=>{if(event.key==='Escape')closeMobileNavigation(true)});
-$('#progressPanel').addEventListener('toggle',()=>{if($('#progressPanel').open)requestAnimationFrame(renderBowlerProgress)});
+$('#progressPanel')?.addEventListener('toggle',()=>{if($('#progressPanel').open)requestAnimationFrame(renderBowlerProgress)});
 matchMedia('(min-width:1024px)').addEventListener('change',applyDeviceLayout);
 matchMedia('(max-width:767px)').addEventListener('change',()=>{document.body.dataset.layout=matchMedia('(max-width:767px)').matches?'phone':matchMedia('(min-width:1024px)').matches?'desktop':'tablet';closeMobileNavigation()});
 applyDeviceLayout();
 
-restoreDrafts();renderAll();renderSaveSyncStatus();
+restoreDrafts();ensureInitialStatsSelection();renderAll();renderSaveSyncStatus();
 
 
 let progressResizeTimer;window.addEventListener('resize',()=>{clearTimeout(progressResizeTimer);progressResizeTimer=setTimeout(renderBowlerProgress,120)});
+
 
 
 
