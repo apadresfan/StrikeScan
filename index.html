@@ -4,12 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#087978" />
-  <title>StrikeScan 1.3</title>
-  <meta name="application-name" content="StrikeScan 1.3" />
-  <meta name="application-version" content="1.3" />
+  <title>StrikeScan 1.4</title>
+  <meta name="application-name" content="StrikeScan 1.4" />
+  <meta name="application-version" content="1.4" />
   <link rel="icon" type="image/svg+xml" sizes="any" href="ball-pin.svg?v=20261002-icon1" />
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="styles.css?v=1.3.0" />
+  <link rel="stylesheet" href="styles.css?v=1.4.0" />
 </head>
 <body>
   <header class="topbar graphic-topbar">
@@ -18,12 +18,17 @@
   </header>
 
   <nav class="tabs" aria-label="Main navigation">
-    <button class="tab active" data-view="dashboard">Dashboard</button>
-    <button class="tab" data-view="setup">Leagues</button>
-    <button class="tab" data-view="night">Bowl & Scan</button>
-    <button class="tab" data-view="history">History</button>
-    <button class="tab" data-view="backup">Backup</button>
-    <button class="tab" data-view="cloud">Cloud Sync</button>
+    <button class="tab active" data-view="dashboard" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 20V10h4v10M10 20V4h4v16M16 20v-7h4v7"/></svg><span class="nav-desktop-label">Dashboard</span><span class="nav-phone-label">Stats</span></button>
+    <button class="tab" data-view="night"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4M8 12h8M12 8v8"/></svg><span class="nav-desktop-label">Bowl &amp; Scan</span><span class="nav-phone-label">Scan</span></button>
+    <button class="tab" data-view="history"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 5v5h5M4.6 9a8 8 0 1 1-.1 6M12 7v5l3 2"/></svg><span>History</span></button>
+    <div class="nav-more">
+      <button id="navMoreBtn" class="nav-more-button" aria-expanded="false" aria-controls="navMorePanel"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 11h.01M12 11h.01M19 11h.01"/></svg><span>More</span></button>
+      <div id="navMorePanel" class="nav-more-panel">
+        <button class="tab" data-view="setup">Leagues</button>
+        <button class="tab" data-view="backup">Backup</button>
+        <button class="tab" data-view="cloud">Cloud Sync</button>
+      </div>
+    </div>
   </nav>
 
   <main>
@@ -36,26 +41,33 @@
         </div>
         <button class="primary" data-go="night">Start League Night</button>
       </div>
-      <div class="card">
+      <div class="dashboard-overview">
+      <div class="card dashboard-controls">
+        <details id="dashboardContext" class="scan-disclosure"><summary>League &amp; team</summary>
         <div class="selector-row">
           <label>Season<select id="dashSeasonSelect"></select></label>
           <label>League<select id="dashLeagueSelect"></select></label>
           <label>Team<select id="dashTeamSelect"></select></label>
         </div>
+        </details>
         <label>Show statistics for<select id="statsSource"><option value="league">League Nights</option><option value="practice">Practice Sessions</option></select></label>
         <label>Bowler statistics<select id="dashboardBowlerSelect"></select></label>
         <div id="statsSelectionHelp" class="notice small hidden" role="status"></div>
-        <div class="row wrap">
+        <details id="dashboardSharing" class="scan-disclosure"><summary>Share bowler stats</summary><div class="row wrap">
           <button id="downloadBowlerPdfBtn" class="primary" disabled>Download Bowler PDF</button>
           <button id="shareBowlerPdfBtn" class="ghost" disabled>Share Bowler PDF</button>
-        </div><p class="muted small">Select a bowler with saved games to export their statistics, scores and frame details.</p>
+        </div><p class="muted small">Select a bowler with saved games to export their statistics, scores and frame details.</p></details>
       </div>
+      <div class="dashboard-metrics">
       <div id="statCards" class="stat-grid"></div>
-      <div id="bowlerStatCards" class="stat-grid"></div>
+      <details id="frameStatsPanel" class="metric-details"><summary>Frame &amp; series statistics</summary><div id="bowlerStatCards" class="stat-grid"></div></details>
       <p id="handicapSummary" class="card small hidden"></p>
       <p id="gameAverageSummary" class="muted small"></p>
-      <div class="card"><h3>Personal bests</h3><div id="personalBests"></div></div>
-      <div class="card progress-card"><h3>Bowler progress</h3><p class="muted small">Tap a score to see the game details.</p><div id="bowlerProgress"></div></div>
+      </div></div>
+      <div class="dashboard-insights">
+      <div class="card"><details id="personalBestPanel" class="insight-details"><summary><h3>Personal bests</h3></summary><div id="personalBests"></div></details></div>
+      <div class="card progress-card"><details id="progressPanel" class="insight-details"><summary><h3>Bowler progress</h3></summary><p class="muted small">Tap a score to see the game details.</p><div id="bowlerProgress"></div></details></div>
+      </div>
       <div class="grid-2">
         <div class="card">
           <div class="section-title"><h3 id="recentNightsTitle">Recent league nights</h3></div>
@@ -248,7 +260,7 @@
         </div>
       </div>
     </section>
-    <footer style="text-align:center;margin-top:1rem;padding:.8rem;background:#fff9ee;border-radius:10px;color:#452f58"><small id="appVersion">StrikeScan 1.3</small></footer>
+    <footer style="text-align:center;margin-top:1rem;padding:.8rem;background:#fff9ee;border-radius:10px;color:#452f58"><small id="appVersion">StrikeScan 1.4</small></footer>
   </main>
 
 
@@ -277,10 +289,11 @@
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script src="vendor/jspdf.umd.min.js"></script>
   <script src="pdf-header.js?v=20261003-leopard2"></script>
-  <script src="app.js?v=1.3.0"></script>
-  <script type="module" src="cloud-sync.js?v=1.3.0"></script>
+  <script src="app.js?v=1.4.0"></script>
+  <script type="module" src="cloud-sync.js?v=1.4.0"></script>
 </body>
 </html>
+
 
 
 

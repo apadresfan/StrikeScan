@@ -130,8 +130,8 @@ function ensureDraft(){renderSessionControls();const t=currentTeam();if(!t){nigh
  }else{for(const g of nightDraft.games)g.bowlers=sessionRoster().map(b=>g.bowlers.find(x=>x.bowlerId===b.id)||{bowlerId:b.id,name:b.name,frames:Array(10).fill('')})}}
 function renderScoreSheet(){ensureDraft();if($('#undoScanBtn'))$('#undoScanBtn').disabled=!!scanSession||!scanUndo||scanUndo.store!==activeStoreKey||scanUndo.teamId!==currentTeam()?.id;const el=$('#scoreSheet');const t=currentTeam(); if(!t){el.innerHTML='<div class="empty">Select a team first.</div>';return}if(!t.bowlers.length){el.innerHTML='<div class="empty">Add bowlers to this team first.</div>';return}
   const openGames=new Set([...el.querySelectorAll('[data-score-game][open]')].map(d=>+d.dataset.scoreGame));const hadPanels=!!el.querySelector('[data-score-game]');
-  el.innerHTML=nightDraft.games.map(g=>`<details class="game-block score-game" data-score-game="${g.game}" ${openGames.has(g.game)||(!hadPanels&&g.game===1)?'open':''}><summary class="game-heading"><h3>Game ${g.game}</h3><span class="muted">${g.bowlers.length} bowler${g.bowlers.length===1?'':'s'}</span></summary><table class="score-table"><thead><tr><th>Bowler</th>${Array.from({length:10},(_,i)=>`<th>${i+1}</th>`).join('')}<th>Total</th></tr></thead><tbody>${g.bowlers.map(b=>`<tr><td class="name-cell">${esc(b.name)}<label class="small"><input type="checkbox" data-draft-absent="${g.game}:${b.bowlerId}" ${b.absent?'checked':''}> Absent (ABS)</label></td>${b.frames.map((f,i)=>`<td><input class="frame-input ${i===9?'tenth':''} ${b.ocrUncertain?.[i]?'ocr-uncertain':''}" title="${b.ocrUncertain?.[i]?'OCR uncertain — check this frame':''}" data-game="${g.game}" data-bowler="${b.bowlerId}" data-frame="${i}" value="${esc(f)}" ${b.absent?'disabled':''} maxlength="4" inputmode="text" autocomplete="off" spellcheck="false" aria-label="${esc(b.name)}, game ${g.game}, frame ${i+1}">${b.ocrSourceId?`<button type="button" class="frame-review-btn" data-review-frame="${g.game}:${b.bowlerId}:${i}" aria-label="Review ${esc(b.name)}, game ${g.game}, frame ${i+1}">${b.ocrUncertain?.[i]?'⚠ Review':'View'}</button>`:''}</td>`).join('')}<td class="score-total"><input class="game-total-input" data-total="${g.game}:${b.bowlerId}" type="number" min="0" max="300" step="1" inputmode="numeric" placeholder="Total" aria-label="${esc(b.name)}, game ${g.game}, total score" style="width:80px"><small data-total-note="${g.game}:${b.bowlerId}"></small></td></tr>`).join('')}</tbody></table></details>`).join('');
-  $$('[data-score-game]').forEach(panel=>panel.addEventListener('toggle',()=>{if(panel.isConnected&&panel.open)$$('[data-score-game]').forEach(other=>{if(other!==panel)other.open=false})}));
+  el.innerHTML=nightDraft.games.map(g=>`<details class="game-block score-game" data-score-game="${g.game}" ${openGames.has(g.game)||(!hadPanels&&(matchMedia('(min-width:1024px)').matches||g.game===1))?'open':''}><summary class="game-heading"><h3>Game ${g.game}</h3><span class="muted">${g.bowlers.length} bowler${g.bowlers.length===1?'':'s'}</span></summary><table class="score-table"><thead><tr><th>Bowler</th>${Array.from({length:10},(_,i)=>`<th>${i+1}</th>`).join('')}<th>Total</th></tr></thead><tbody>${g.bowlers.map(b=>`<tr><td class="name-cell">${esc(b.name)}<label class="small"><input type="checkbox" data-draft-absent="${g.game}:${b.bowlerId}" ${b.absent?'checked':''}> Absent (ABS)</label></td>${b.frames.map((f,i)=>`<td><input class="frame-input ${i===9?'tenth':''} ${b.ocrUncertain?.[i]?'ocr-uncertain':''}" title="${b.ocrUncertain?.[i]?'OCR uncertain — check this frame':''}" data-game="${g.game}" data-bowler="${b.bowlerId}" data-frame="${i}" value="${esc(f)}" ${b.absent?'disabled':''} maxlength="4" inputmode="text" autocomplete="off" spellcheck="false" aria-label="${esc(b.name)}, game ${g.game}, frame ${i+1}">${b.ocrSourceId?`<button type="button" class="frame-review-btn" data-review-frame="${g.game}:${b.bowlerId}:${i}" aria-label="Review ${esc(b.name)}, game ${g.game}, frame ${i+1}">${b.ocrUncertain?.[i]?'⚠ Review':'View'}</button>`:''}</td>`).join('')}<td class="score-total"><input class="game-total-input" data-total="${g.game}:${b.bowlerId}" type="number" min="0" max="300" step="1" inputmode="numeric" placeholder="Total" aria-label="${esc(b.name)}, game ${g.game}, total score" style="width:80px"><small data-total-note="${g.game}:${b.bowlerId}"></small></td></tr>`).join('')}</tbody></table></details>`).join('');
+  $$('[data-score-game]').forEach(panel=>panel.addEventListener('toggle',()=>{if(panel.isConnected&&panel.open&&!matchMedia('(min-width:1024px)').matches)$$('[data-score-game]').forEach(other=>{if(other!==panel)other.open=false})}));
   $$('[data-review-frame]').forEach(button=>button.onclick=()=>{const [game,id,frame]=button.dataset.reviewFrame.split(':');openFrameReview(+game,id,+frame)});
   $$('[data-total]').forEach(input=>input.oninput=()=>{const [game,id]=input.dataset.total.split(':');const b=nightDraft.games.find(g=>g.game===+game).bowlers.find(b=>b.bowlerId===id);b.manualTotal=input.value;b.totalOnly=input.value!=='';updateTotals()});
   $$('[data-draft-absent]').forEach(el=>el.onchange=()=>{const [game,id]=el.dataset.draftAbsent.split(':');nightDraft.games.find(g=>g.game===+game).bowlers.find(b=>b.bowlerId===id).absent=el.checked;renderScoreSheet()});
@@ -810,7 +810,7 @@ async function shareBowlerPdf(){
 
 function exportBackup(){const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`bowling-tracker-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(a.href)}
 function importBackup(){const f=$('#importFile').files[0];if(!f)return toast('Choose a backup file');const reader=new FileReader();reader.onload=()=>{try{const data=JSON.parse(reader.result);if(!data.seasons)throw new Error('Invalid');if(confirm('Replace current bowling data with this backup?')){state=data;localStorage.removeItem(activeStoreKey+'.drafts.v1');nightDraft=null;sessionDrafts.clear();persist();toast('Backup imported')}}catch{toast('That file is not a valid bowling backup')}};reader.readAsText(f)}
-function openScoreGame(game){$('#scoreSheetPanel').open=true;$$('[data-score-game]').forEach(panel=>panel.open=+panel.dataset.scoreGame===+game)}
+function openScoreGame(game){$('#scoreSheetPanel').open=true;$$('[data-score-game]').forEach(panel=>panel.open=+panel.dataset.scoreGame===+game||(matchMedia('(min-width:1024px)').matches&&panel.open))}
 function clearNight(){const t=currentTeam();if(!t)return;if(confirm('Clear the current unsaved score sheet?')){nightDraft=newSessionDraft(t);clearScanReview();renderScoreSheet()}}
 function renderNightHeader(){if(!currentTeam())$('#sessionSettings').open=true;const s=currentSeason(),l=currentLeague(),t=currentTeam();$('#nightSelection').textContent=t?`${s.name} · ${l.name} · ${t.name}`:'Choose a league and team'}
 function renderAll(){ensureSelection();if(nightReportView&&!nightReportStillCurrent())closeNightReport();if(ocrResult&&(ocrResult.store!==activeStoreKey||ocrResult.teamId!==currentTeam()?.id))clearScanReview();renderSelectors();renderBowlers();renderDashboard();renderHistory();renderNightHeader();renderScoreSheet();renderHandicapSettings();renderHandicapSummary()}
@@ -844,7 +844,7 @@ function renderPracticeHistory(){
  root.querySelectorAll('[data-practice-delete]').forEach(b=>b.onclick=()=>{if(confirm('Delete this practice session?')){t.practiceSessions=t.practiceSessions.filter(n=>n.id!==b.dataset.practiceDelete);persist();toast('Practice session deleted')}});
 }
 
-function showView(name){document.body.classList.toggle('scan-view',name==='night');$$('.view').forEach(v=>v.classList.toggle('active',v.id===`view-${name}`));$$('.tab').forEach(t=>t.classList.toggle('active',t.dataset.view===name));window.scrollTo({top:0,behavior:'smooth'})}
+function showView(name){closeMobileNavigation();$('#navMoreBtn').classList.toggle('active',['setup','backup','cloud'].includes(name));$$('.tab').forEach(t=>{if(t.dataset.view===name)t.setAttribute('aria-current','page');else t.removeAttribute('aria-current')});document.body.classList.toggle('scan-view',name==='night');$$('.view').forEach(v=>v.classList.toggle('active',v.id===`view-${name}`));$$('.tab').forEach(t=>t.classList.toggle('active',t.dataset.view===name));window.scrollTo({top:0,behavior:'smooth'})}
 let scanFiles=[], scanResults=new Map(), scanSources=new Map(), scanUndo=null, scanSession=null, frameReview=null;
 const cloneData=value=>JSON.parse(JSON.stringify(value));
 function assertScanActive(token){if(token&&(token.cancelled||token.store!==activeStoreKey||token.teamId!==currentTeam()?.id||token.draft!==nightDraft))throw new Error('SCAN_CANCELLED')}
@@ -1008,10 +1008,33 @@ window.bowlingCloud={
  replace:payload=>{localStorage.removeItem(activeStoreKey+'.drafts.v1');const data=JSON.parse(payload);if(!Array.isArray(data.seasons))throw Error('Invalid cloud data');state={version:1,seasons:data.seasons,selected:state.selected||blankState().selected};nightDraft=null;sessionDrafts.clear();localStorage.setItem(activeStoreKey,JSON.stringify(state));renderAll()},
  backup:()=>{localStorage.setItem(activeStoreKey+'.beforeCloudReplace',JSON.stringify(state));exportBackup()}
 };
+
+function closeMobileNavigation(restoreFocus=false){
+ const button=$('#navMoreBtn'),open=button.getAttribute('aria-expanded')==='true';
+ button.setAttribute('aria-expanded','false');if(open&&restoreFocus)button.focus();
+}
+function applyDeviceLayout(){
+ const wide=matchMedia('(min-width:1024px)').matches;
+ document.body.dataset.layout=wide?'desktop':matchMedia('(max-width:767px)').matches?'phone':'tablet';
+ closeMobileNavigation();
+ for(const id of ['dashboardContext','dashboardSharing','frameStatsPanel','personalBestPanel','progressPanel','sessionSettings','scanOptions','scoreSheetPanel'])$('#'+id).open=wide;
+ const panels=$$('[data-score-game]'),first=panels.find(p=>p.open)||panels[0];
+ panels.forEach(panel=>panel.open=wide||panel===first);
+ if(wide)requestAnimationFrame(renderBowlerProgress);
+}
+$('#navMoreBtn').onclick=()=>{const button=$('#navMoreBtn');button.setAttribute('aria-expanded',String(button.getAttribute('aria-expanded')!=='true'))};
+document.addEventListener('click',event=>{if(!event.target.closest('.nav-more'))closeMobileNavigation()});
+document.addEventListener('keydown',event=>{if(event.key==='Escape')closeMobileNavigation(true)});
+$('#progressPanel').addEventListener('toggle',()=>{if($('#progressPanel').open)requestAnimationFrame(renderBowlerProgress)});
+matchMedia('(min-width:1024px)').addEventListener('change',applyDeviceLayout);
+matchMedia('(max-width:767px)').addEventListener('change',()=>{document.body.dataset.layout=matchMedia('(max-width:767px)').matches?'phone':matchMedia('(min-width:1024px)').matches?'desktop':'tablet';closeMobileNavigation()});
+applyDeviceLayout();
+
 restoreDrafts();renderAll();renderSaveSyncStatus();
 
 
 let progressResizeTimer;window.addEventListener('resize',()=>{clearTimeout(progressResizeTimer);progressResizeTimer=setTimeout(renderBowlerProgress,120)});
+
 
 
 
