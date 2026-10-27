@@ -1,5 +1,5 @@
-const CACHE='bowling-tracker-v46-strikescan-1.4.1';
-const CORE=['./','./index.html','./leopard-print.svg?v=20261003-bg1','./bowling-header.svg?v=20261003-leopard2','./ball-pin.svg?v=20261002-icon1','./styles.css?v=1.4.1','./app.js?v=1.4.1','./pdf-header.js?v=20261003-leopard2','./cloud-sync.js?v=1.4.1','./manifest.webmanifest','./vendor/jspdf.umd.min.js'];
+const CACHE='bowling-tracker-v47-strikescan-1.4.2';
+const CORE=['./','./index.html','./leopard-print.svg?v=20261003-bg1','./bowling-header.svg?v=20261003-leopard2','./ball-pin.svg?v=20261002-icon1','./styles.css?v=1.4.2','./app.js?v=1.4.2','./pdf-header.js?v=20261003-leopard2','./cloud-sync.js?v=1.4.2','./manifest.webmanifest','./vendor/jspdf.umd.min.js'];
 self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE)))});
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('bowling-tracker-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',e=>{

@@ -550,7 +550,33 @@ function digitalRowBands(ys,header,columns,lit,w,h){
  }
  return bands;
 }
+function readBlueBoxScoreboard(data,w,h,expectedRows=0){
+ const blue=(x,y)=>{const i=(y*w+x)*4;return data[i+2]>75&&data[i+2]>data[i]*1.4&&data[i+2]>data[i+1]*1.25};
+ const yellow=(x,y,ratio=1.1)=>{const i=(y*w+x)*4;return data[i]>125&&data[i+1]>120&&data[i+2]<Math.min(data[i],data[i+1])*ratio};
+ const bands=[];for(let y=0;y<h;y++){let n=0;for(let x=0;x<w;x+=2)if(blue(x,y))n++;if(n>w*.27){if(!bands.length||y>bands.at(-1).at(-1)+1)bands.push([y]);else bands.at(-1).push(y)}}
+ const rows=[];
+ for(const band of bands){if(band.length<h*.055)continue;const top=band[0],bottom=band.at(-1)+1,runs=[];
+  for(let x=0;x<w;x++){let n=0;for(let y=top;y<bottom;y+=2)if(blue(x,y))n++;if(n>(bottom-top)*.05){if(!runs.length||x>runs.at(-1).at(-1)+1)runs.push([x]);else runs.at(-1).push(x)}}
+  const boxes=runs.filter(r=>r.length>w*.045);if(boxes.length!==10)continue;
+  const widths=boxes.map(b=>b.length),median=[...widths].sort((a,b)=>a-b)[5];if(widths.some(n=>n<median*.65||n>median*1.5))continue;
+  const frames=[],uncertain=[],frameCrops=[];let total=null;
+  for(const [f,box] of boxes.entries()){
+   const x0=box[0]+2,x1=box.at(-1)-1,y0=top+2,y1=bottom-2;
+   const candidates=[.8,.9,1,1.1,1.2].map(ratio=>readFrameAtThreshold((x,y)=>yellow(x,y,ratio),x0,x1,y0,y1,w/1338,f)).filter(Boolean).sort((a,b)=>a.error-b.error);
+   const result=candidates[0];frames.push(result?.mark||'');uncertain.push(!result||result.error>.18||result.margin<.025||candidates.some(c=>c.mark!==result.mark));
+   frameCrops.push({x:x0/w,y:y0/h,w:(x1-x0)/w,h:(y1-y0)/h});
+   if(f===9){const totals=[.8,.9,1,1.1,1.2].map(ratio=>readFrameAtThreshold((x,y)=>yellow(x,y,ratio),x0,x1,bottom+2,Math.min(h,Math.round(bottom+(bottom-top))),w/1338,-1)).filter(Boolean).sort((a,b)=>a.error-b.error);total=totals[0];if(total)total.disputed=totals.some(t=>t.mark!==total.mark);}
+  }
+  if(frames.filter(Boolean).length<6)continue;
+  rows.push({bowlerId:'',name:'Scoreboard row '+(rows.length+1),line:'Blue frame boxes detected. Assign the bowler and check highlighted frames.',frames,uncertain,frameCrops,displayedTotal:total?Number(total.mark):null,totalUncertain:!total||total.error>.18||!!total.disputed});
+ }
+ if(!rows.length)return null;
+ if(expectedRows&&rows.length!==expectedRows)throw Error('Found '+rows.length+' bowler rows, but '+expectedRows+' were selected.');
+ return rows;
+}
+
 function readDigitalGrid(data,w,h,adjusted=false,expectedRows=0){
+ const blueRows=readBlueBoxScoreboard(data,w,h,expectedRows);if(blueRows)return blueRows;
  let red=0,green=0;for(let i=0;i<data.length;i+=400){red+=data[i];green+=data[i+1];}const pink=red>green*1.15;
  const lit=(x,y)=>{const i=(y*w+x)*4;return adjusted?((data[i+1]>170&&data[i+2]>150)||(data[i]>170&&data[i+2]>170)):(data[i+1]>110&&data[i+2]>110&&data[i]<data[i+1]*.85)};
  const glyphLit=(x,y)=>{if(!pink)return lit(x,y);const i=(y*w+x)*4;return data[i+1]>85&&data[i+2]>150&&data[i]<data[i+2]*.9};
@@ -891,7 +917,7 @@ async function openFrameReview(game,bowlerId,frame){
  try{const img=new Image();await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=reject;img.src=source.url});if(frameReview?.draft!==nightDraft||frameReview?.frame!==frame||frameReview?.bowlerId!==bowlerId)return;const canvas=$('#frameReviewPhoto'),ctx=canvas.getContext('2d');const crop=bounds||{x:0,y:0,w:1,h:1};const x=Math.max(0,crop.x),y=Math.max(0,crop.y),w=Math.min(crop.w,1-x),h=Math.min(crop.h,1-y);canvas.width=800;canvas.height=Math.min(600,Math.max(180,Math.round(800*h*img.naturalHeight/(w*img.naturalWidth))));ctx.drawImage(img,x*img.naturalWidth,y*img.naturalHeight,w*img.naturalWidth,h*img.naturalHeight,0,0,canvas.width,canvas.height);canvas.classList.remove('hidden');if(!bounds)$('#frameReviewNoPhoto').textContent='Standard OCR: full photo shown. Locate the selected frame.';}catch{$('#frameReviewNoPhoto').textContent='The scan photo could not be opened.';}
 }
 function saveFrameReview(){if(!frameReview||frameReview.draft!==nightDraft)return;const {game,bowlerId,frame}=frameReview,mark=normalizeFrame($('#frameReviewInput').value);if(parseFrame(mark,frame)===null){$('#frameReviewStatus').textContent='Enter a valid frame mark, such as 9/, 8-, or X. The tenth frame may need a bonus roll.';return}const b=nightDraft.games.find(g=>g.game===game)?.bowlers.find(b=>b.bowlerId===bowlerId);if(!b)return;b.totalOnly=false;delete b.manualTotal;b.frames[frame]=mark;b.ocrUncertain??=Array(10).fill(false);b.ocrUncertain[frame]=false;updateOcrFromScoreSheet(b,game,frame);$('#frameReviewDialog').close();frameReview=null;renderScoreSheet()}
-function gridWorkerSource(){return 'const TOTAL_FONT='+JSON.stringify(TOTAL_FONT)+';const GRID_FONT='+JSON.stringify(GRID_FONT)+';const SPLIT_FONT='+JSON.stringify(SPLIT_FONT)+';'+[normalizeFrame,parseFrame,bowlingScore,straightenDigitalGrid,highlightedRollFeatures,readSplitFirstRoll,readSplitSecondRoll,distinguishFiveAndSix,readFrameAtThreshold,readDisplayedGridTotal,digitalRowBands,readDigitalGrid].map(fn=>fn.toString()).join('\n')+'\nonmessage=e=>{try{postMessage({rows:readDigitalGrid(new Uint8ClampedArray(e.data.data),e.data.w,e.data.h,false,e.data.expectedRows)})}catch(error){postMessage({error:error.message})}}';}
+function gridWorkerSource(){return 'const TOTAL_FONT='+JSON.stringify(TOTAL_FONT)+';const GRID_FONT='+JSON.stringify(GRID_FONT)+';const SPLIT_FONT='+JSON.stringify(SPLIT_FONT)+';'+[normalizeFrame,parseFrame,bowlingScore,straightenDigitalGrid,highlightedRollFeatures,readSplitFirstRoll,readSplitSecondRoll,distinguishFiveAndSix,readFrameAtThreshold,readDisplayedGridTotal,digitalRowBands,readBlueBoxScoreboard,readDigitalGrid].map(fn=>fn.toString()).join('\n')+'\nonmessage=e=>{try{postMessage({rows:readDigitalGrid(new Uint8ClampedArray(e.data.data),e.data.w,e.data.h,false,e.data.expectedRows)})}catch(error){postMessage({error:error.message})}}';}
 async function recognizeGridAsync(data,w,h,token){assertScanActive(token);if(typeof Worker==='undefined')return readDigitalGrid(data,w,h,false,token.expectedRows);if(!token.gridWorker){const url=URL.createObjectURL(new Blob([gridWorkerSource()],{type:'text/javascript'}));token.gridWorker=new Worker(url);URL.revokeObjectURL(url)}return new Promise((resolve,reject)=>{token.cancelPending=()=>reject(new Error('SCAN_CANCELLED'));token.gridWorker.onmessage=e=>{token.cancelPending=null;e.data.error?reject(new Error(e.data.error)):resolve(e.data.rows)};token.gridWorker.onerror=()=>{token.cancelPending=null;reject(new Error('The scan worker could not start. Reload the page and retry.'))};const copy=new Uint8ClampedArray(data);token.gridWorker.postMessage({data:copy.buffer,w,h,expectedRows:token.expectedRows},[copy.buffer])})}
 async function runScanBatch(){
  if(scanSession)return;const team=currentTeam();if(!scanFiles.length)return toast('Choose one to three scoreboard photos.');if(!team?.bowlers.length)return toast('Choose a team and add its bowlers first.');if(new Set(scanFiles.map(i=>i.game)).size!==scanFiles.length)return toast('Assign a different game number to each photo.');if($('#ocrMode').value==='standard'&&!window.Tesseract)return toast('The OCR component has not loaded. Connect and reload the page.');ensureDraft();
@@ -1052,6 +1078,7 @@ restoreDrafts();ensureInitialStatsSelection();renderAll();renderSaveSyncStatus()
 
 
 let progressResizeTimer;window.addEventListener('resize',()=>{clearTimeout(progressResizeTimer);progressResizeTimer=setTimeout(renderBowlerProgress,120)});
+
 
 
 
