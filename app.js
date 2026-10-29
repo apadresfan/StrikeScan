@@ -551,24 +551,24 @@ function digitalRowBands(ys,header,columns,lit,w,h){
  return bands;
 }
 function readBlueBoxScoreboard(data,w,h,expectedRows=0){
- const blue=(x,y)=>{const i=(y*w+x)*4;return data[i+2]>75&&data[i+2]>data[i]*1.4&&data[i+2]>data[i+1]*1.25};
- const yellow=(x,y,ratio=1.1)=>{const i=(y*w+x)*4;return data[i]>125&&data[i+1]>120&&data[i+2]<Math.min(data[i],data[i+1])*ratio};
+ const blue=(x,y)=>{const i=(y*w+x)*4;return (data[i+2]>75&&data[i+2]>data[i]*1.4&&data[i+2]>data[i+1]*1.25)||(data[i+1]>90&&data[i+2]>70&&data[i]<Math.min(data[i+1],data[i+2])*.65)};
+ const yellow=(x,y,ratio=1.1,threshold=125)=>{const i=(y*w+x)*4;return data[i]>threshold&&data[i+1]>threshold-5&&data[i+2]<Math.min(data[i],data[i+1])*ratio};
  const bands=[];for(let y=0;y<h;y++){let n=0;for(let x=0;x<w;x+=2)if(blue(x,y))n++;if(n>w*.27){if(!bands.length||y>bands.at(-1).at(-1)+1)bands.push([y]);else bands.at(-1).push(y)}}
  const rows=[];
- for(const band of bands){if(band.length<h*.055)continue;const top=band[0],bottom=band.at(-1)+1,runs=[];
+ for(const band of bands){if(band.length<Math.max(12,w*.02))continue;const top=band[0],bottom=band.at(-1)+1,runs=[];
   for(let x=0;x<w;x++){let n=0;for(let y=top;y<bottom;y+=2)if(blue(x,y))n++;if(n>(bottom-top)*.05){if(!runs.length||x>runs.at(-1).at(-1)+1)runs.push([x]);else runs.at(-1).push(x)}}
   const boxes=runs.filter(r=>r.length>w*.045);if(boxes.length!==10)continue;
   const widths=boxes.map(b=>b.length),median=[...widths].sort((a,b)=>a-b)[5];if(widths.some(n=>n<median*.65||n>median*1.5))continue;
   const frames=[],uncertain=[],frameCrops=[];let total=null;
   for(const [f,box] of boxes.entries()){
    const x0=box[0]+2,x1=box.at(-1)-1,y0=top+2,y1=bottom-2;
-   const candidates=[.8,.9,1,1.1,1.2].map(ratio=>readFrameAtThreshold((x,y)=>yellow(x,y,ratio),x0,x1,y0,y1,w/1338,f)).filter(Boolean).sort((a,b)=>a.error-b.error);
+   const candidates=[125,160,185,210].flatMap(threshold=>[.8,.9,1,1.1,1.2].map(ratio=>readFrameAtThreshold((x,y)=>yellow(x,y,ratio,threshold),x0,x1,y0,y1,w/1338,f))).filter(Boolean).sort((a,b)=>a.error-b.error);
    const result=candidates[0];frames.push(result?.mark||'');uncertain.push(!result||result.error>.18||result.margin<.025||candidates.some(c=>c.mark!==result.mark));
    frameCrops.push({x:x0/w,y:y0/h,w:(x1-x0)/w,h:(y1-y0)/h});
    if(f===9){const totals=[.8,.9,1,1.1,1.2].map(ratio=>readFrameAtThreshold((x,y)=>yellow(x,y,ratio),x0,x1,bottom+2,Math.min(h,Math.round(bottom+(bottom-top))),w/1338,-1)).filter(Boolean).sort((a,b)=>a.error-b.error);total=totals[0];if(total)total.disputed=totals.some(t=>t.mark!==total.mark);}
   }
   if(frames.filter(Boolean).length<6)continue;
-  rows.push({bowlerId:'',name:'Scoreboard row '+(rows.length+1),line:'Blue frame boxes detected. Assign the bowler and check highlighted frames.',frames,uncertain,frameCrops,displayedTotal:total?Number(total.mark):null,totalUncertain:!total||total.error>.18||!!total.disputed});
+  rows.push({bowlerId:'',name:'Scoreboard row '+(rows.length+1),line:'Colored frame boxes detected. Assign the bowler and check highlighted frames.',frames,uncertain,frameCrops,displayedTotal:total?Number(total.mark):null,totalUncertain:!total||total.error>.18||!!total.disputed});
  }
  if(!rows.length)return null;
  if(expectedRows&&rows.length!==expectedRows)throw Error('Found '+rows.length+' bowler rows, but '+expectedRows+' were selected.');
@@ -674,13 +674,14 @@ async function findDigitalGridAutomatically(file,token=null){
  const settings=[[0,1,'original colors'],[25,1,'brighter'],[-25,1,'darker'],[0,1.3,'higher contrast'],[25,1.3,'brighter with higher contrast'],[0,.8,'softer contrast'],[50,1,'extra brightness'],[-40,1.5,'darker with higher contrast'],[45,1.6,'stronger exposure recovery']];
  const unique=settings.filter((s,i,a)=>a.findIndex(t=>t[0]===s[0]&&t[1]===s[1])===i);
  let attempts=0,best=null;const readings=[];const fingerprints=new Map();
- for(const target of [...new Set([Math.min(1338,original.width),Math.min(1024,original.width)])]){
+ const targets=[...new Set([1338,Math.min(1338,original.width),Math.min(1024,original.width)])];
+ for(const target of targets){
   const width=target,height=Math.round(original.height*width/original.width),canvas=document.createElement('canvas');
   canvas.width=width;canvas.height=height;
   const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.drawImage(original,0,0,width,height);
   const raw=ctx.getImageData(0,0,width,height).data;
   for(const [brightness,contrast,label] of unique){
-   assertScanActive(token);attempts++;if($('#ocrProgressBar'))$('#ocrProgressBar').style.width=Math.round(attempts/(unique.length*2)*100)+'%';$('#ocrStatus').textContent='Looking for scores… attempt '+attempts+' ('+label+'). Best reading: '+(best?.quality.valid||0)+' frames.';
+   assertScanActive(token);attempts++;if($('#ocrProgressBar'))$('#ocrProgressBar').style.width=Math.round(attempts/(unique.length*targets.length)*100)+'%';$('#ocrStatus').textContent='Looking for scores… attempt '+attempts+' ('+label+'). Best reading: '+(best?.quality.valid||0)+' frames.';
    await new Promise(resolve=>setTimeout(resolve,0));
    const data=brightness===0&&contrast===1?raw:adjustScoreboardPixels(raw,brightness,contrast);
    try{
@@ -1078,6 +1079,7 @@ restoreDrafts();ensureInitialStatsSelection();renderAll();renderSaveSyncStatus()
 
 
 let progressResizeTimer;window.addEventListener('resize',()=>{clearTimeout(progressResizeTimer);progressResizeTimer=setTimeout(renderBowlerProgress,120)});
+
 
 
 
