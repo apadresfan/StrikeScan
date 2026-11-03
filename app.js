@@ -611,8 +611,16 @@ function readDigitalGrid(data,w,h,adjusted=false,expectedRows=0){
     const splitLit=(x,y)=>{const i=(y*w+x)*4;return data[i+2]>120&&data[i+2]-data[i]>separation};
     const result=readFrameAtThreshold(splitLit,x0,x1,y0,y1,scale,f);if(result)candidates.push(result);
    }
+   const magentaCandidates=[];
+   // Pink frame marks can coexist with green totals and cyan grid lines.
+   // Detect the glyph color locally instead of inferring it from the whole image.
+   for(const threshold of [90,120,150,180]){
+    const magentaLit=(x,y)=>{const i=(y*w+x)*4;return data[i]>threshold&&data[i+2]>threshold&&data[i+1]<Math.min(data[i],data[i+2])*.9};
+    const result=readFrameAtThreshold(magentaLit,x0,x1,y0,y1,scale,f);if(result){candidates.push(result);magentaCandidates.push(result);}
+   }
    candidates.sort((a,b)=>a.error-b.error);
-   const selected=candidates[0];
+   const voted=[...magentaCandidates].sort((a,b)=>magentaCandidates.filter(c=>c.mark===b.mark).length-magentaCandidates.filter(c=>c.mark===a.mark).length||a.error-b.error)[0];
+   const selected=voted&&magentaCandidates.filter(c=>c.mark===voted.mark).length>magentaCandidates.length/2?voted:candidates[0];
    let mark=selected?.mark||'',lowConfidence=!selected||selected.error>.18||selected.margin<.025||candidates.some(c=>c.mark!==selected.mark);
    if(pink&&f<9&&(!mark||lowConfidence)){
     const first=readSplitFirstRoll(data,w,h,frameEdges[f+1],top);
