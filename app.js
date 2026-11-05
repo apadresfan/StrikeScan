@@ -499,7 +499,7 @@ function distinguishFiveAndSix(mask,matches){
  return [chosen,...matches.filter(m=>m!==chosen)];
 }
 
-function readFrameAtThreshold(lit,x0,x1,y0,y1,scale,frame){
+function readFrameAtThreshold(lit,x0,x1,y0,y1,scale,frame,maxError=.28,fontOverride=null){
  const runs=[];
  for(let x=x0;x<x1;x++){let n=0;for(let y=y0;y<y1;y++)if(lit(x,y))n++;if(n){if(!runs.length||x>runs.at(-1).at(-1)+1)runs.push([x]);else runs.at(-1).push(x);}}
  let marks='',error=0,count=0,margin=1;
@@ -512,9 +512,13 @@ function readFrameAtThreshold(lit,x0,x1,y0,y1,scale,frame){
   if(aspect>2.5){marks+='-';count++;continue;}
   let mask='';
   for(let yy=0;yy<24;yy++)for(let xx=0;xx<16;xx++)mask+=lit(Math.min(b-1,a+Math.floor((xx+.5)*(b-a)/16)),Math.min(d-1,c+Math.floor((yy+.5)*(d-c)/24)))?'1':'0';
-  let matches=(frame===-1?[...TOTAL_FONT,...GRID_FONT.filter(t=>/^[0-9]$/.test(t.char))]:GRID_FONT).map(t=>{let differences=0;for(let i=0;i<mask.length;i++)if(mask[i]!==t.mask[i])differences++;return {char:t.char,error:differences/mask.length+Math.min(.4,Math.abs(Math.log(aspect/t.aspect))*.15)}}).sort((a,b)=>a.error-b.error);
+  let matches=(fontOverride||(frame===-1?[...TOTAL_FONT,...GRID_FONT.filter(t=>/^[0-9]$/.test(t.char))]:GRID_FONT)).map(t=>{let differences=0;for(let i=0;i<mask.length;i++)if(mask[i]!==t.mask[i])differences++;return {char:t.char,error:differences/mask.length+Math.min(.4,Math.abs(Math.log(aspect/t.aspect))*.15)}}).sort((a,b)=>a.error-b.error);
+  if(frame===-1&&matches[0]?.char==='8'){
+   let middle=0;for(let yy=10;yy<14;yy++)for(let xx=5;xx<11;xx++)if(mask[yy*16+xx]==='1')middle++;
+   if(middle<4){const zero=matches.find(m=>m.char==='0');if(zero){zero.error=matches[0].error;matches=[zero,...matches.filter(m=>m!==zero)];}}
+  }
   matches=distinguishFiveAndSix(mask,matches);
-  if(matches[0].error>.28)return null;
+  if(matches[0].error>maxError)return null;
   marks+=matches[0].char;error+=matches[0].error;count++;margin=Math.min(margin,(matches.find(m=>m.char!==matches[0].char)?.error??1)-matches[0].error);
  }
  if(frame===-1?!/^\d{1,3}$/.test(marks)||Number(marks)>300:parseFrame(marks,frame)===null)return null;
@@ -614,19 +618,37 @@ function readDigitalGrid(data,w,h,adjusted=false,expectedRows=0){
    const magentaCandidates=[];
    // Pink frame marks can coexist with green totals and cyan grid lines.
    // Detect the glyph color locally instead of inferring it from the whole image.
-   for(const threshold of [90,120,150,180]){
+   if(!pink)for(const threshold of [90,120,150,180]){
     const magentaLit=(x,y)=>{const i=(y*w+x)*4;return data[i]>threshold&&data[i+2]>threshold&&data[i+1]<Math.min(data[i],data[i+2])*.9};
     const result=readFrameAtThreshold(magentaLit,x0,x1,y0,y1,scale,f);if(result){candidates.push(result);magentaCandidates.push(result);}
    }
+   const blueCandidates=[];
+   if(pink)for(const threshold of [90,120,150,180])for(const separation of [10,30,60,90]){
+    const blueLit=(x,y)=>{const i=(y*w+x)*4;return data[i+2]>threshold&&data[i+2]-data[i]>separation&&data[i+2]-data[i+1]>separation};
+    const result=readFrameAtThreshold(blueLit,x0,x1,y0,y1,scale,f);if(result){candidates.push(result);blueCandidates.push(result);}
+   }
    candidates.sort((a,b)=>a.error-b.error);
    const voted=[...magentaCandidates].sort((a,b)=>magentaCandidates.filter(c=>c.mark===b.mark).length-magentaCandidates.filter(c=>c.mark===a.mark).length||a.error-b.error)[0];
-   const selected=voted&&magentaCandidates.filter(c=>c.mark===voted.mark).length>magentaCandidates.length/2?voted:candidates[0];
+   const blueVote=[...blueCandidates].sort((a,b)=>blueCandidates.filter(c=>c.mark===b.mark).length-blueCandidates.filter(c=>c.mark===a.mark).length||a.error-b.error)[0];
+   const selected=blueVote&&blueCandidates.filter(c=>c.mark===blueVote.mark).length>blueCandidates.length/2?blueVote:voted&&magentaCandidates.filter(c=>c.mark===voted.mark).length>magentaCandidates.length/2?voted:candidates[0];
    let mark=selected?.mark||'',lowConfidence=!selected||selected.error>.18||selected.margin<.025||candidates.some(c=>c.mark!==selected.mark);
-   if(pink&&f<9&&(!mark||lowConfidence)){
+   if(pink&&f<9&&!mark){
     const first=readSplitFirstRoll(data,w,h,frameEdges[f+1],top);
     const second=first?readSplitSecondRoll(data,w,frameEdges[f+1],top):null;
     const candidate=first&&second?first+second:'';
     if(candidate&&parseFrame(candidate,f)!==null)mark=candidate;
+   }
+   if(pink&&f<9&&!mark){
+    const middle=Math.round(x0+(x1-x0)*.64);
+    const highlightLit=(x,y)=>{const i=(y*w+x)*4;return data[i]>150&&data[i+1]<170&&data[i]-data[i+1]>60};
+    const firstReadings=[-80,-50,-20,0,30].map(separation=>readFrameAtThreshold((x,y)=>{const i=(y*w+x)*4;return data[i]>100&&data[i+1]<170&&data[i]-data[i+2]>separation},Math.round(x0+(x1-x0)*.24),middle-Math.max(3,Math.round(5*scale)),y0,y1,scale,-1,.28)).filter(r=>r&&/^[0-9]$/.test(r.mark)).sort((a,b)=>a.error-b.error);
+    const highlightFont=[{"char":"2","mask":"000011111111000000011111111110001111110000111100111111100001110011111111000111001111111100011110111111110001111011111110000111101111110000011100111111000011110011111000011110001110000011111001110000011111111111000001111111110000011111011111000011111011111100001111111111110001111111111111000111111111111100011111111111110001111111111111000111111111111100011111111111000001111111111100","aspect":0.8205128205128205},...TOTAL_FONT,...GRID_FONT];
+    const ordinaryFirst=readFrameAtThreshold(highlightLit,Math.round(x0+(x1-x0)*.24),middle-Math.max(3,Math.round(5*scale)),y0,y1,scale,-1,.28,highlightFont);
+    if(ordinaryFirst&&/^[0-9]$/.test(ordinaryFirst.mark))firstReadings.push(ordinaryFirst);
+    firstReadings.sort((a,b)=>a.error-b.error);const first=firstReadings[0];
+    const second=readFrameAtThreshold((x,y)=>{const i=(y*w+x)*4;return data[i+2]>120&&data[i+2]-data[i]>30&&data[i+2]-data[i+1]>30},middle,x1,y0,y1,scale,-1);
+    const combined=first&&second?first.mark+second.mark:'';
+    if(combined&&parseFrame(combined,f)!==null){mark=combined;lowConfidence=true;}
    }
    frames.push(mark);uncertainFrames.push(inferred||!mark||lowConfidence);frameCrops.push({x:Math.max(0,(frameEdges[f]-5)/w),y:Math.max(0,(top-6)/h),w:Math.min(1,(frameEdges[f+1]-frameEdges[f]+10)/w),h:Math.min(1,(height*.55+12)/h)});
   }
@@ -1087,6 +1109,7 @@ restoreDrafts();ensureInitialStatsSelection();renderAll();renderSaveSyncStatus()
 
 
 let progressResizeTimer;window.addEventListener('resize',()=>{clearTimeout(progressResizeTimer);progressResizeTimer=setTimeout(renderBowlerProgress,120)});
+
 
 
 
