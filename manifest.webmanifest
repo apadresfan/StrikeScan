@@ -1,11 +1,11 @@
 {
-  "name": "StrikeScan 1.4.5",
+  "name": "StrikeScan 1.5.0",
   "short_name": "StrikeScan",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#0b1020",
   "theme_color": "#121827",
-  "description": "StrikeScan 1.4.5 — Track league nights and practice sessions, bowling stats, teams, seasons, and scoreboard scans.",
+  "description": "StrikeScan 1.5.0 — Track league nights and practice sessions, bowling stats, teams, seasons, and scoreboard scans.",
   "icons": []
 }
 

@@ -554,6 +554,84 @@ function digitalRowBands(ys,header,columns,lit,w,h){
  }
  return bands;
 }
+
+function bowlingRunningTotals(frames){
+ const parsed=Array.from({length:10},(_,i)=>parseFrame(frames?.[i],i)),totals=[];let sum=0,known=true;
+ for(let f=0;f<10;f++){
+  const rolls=parsed[f];if(!rolls){known=false;totals.push(null);continue}
+  let pins=rolls.reduce((a,b)=>a+b,0);
+  if(f<9&&(rolls[0]===10||pins===10)){
+   const need=rolls[0]===10?2:1,next=[];
+   for(let j=f+1;j<10&&next.length<need;j++){if(!parsed[j])break;next.push(...parsed[j])}
+   if(next.length<need)known=false;else pins=10+next.slice(0,need).reduce((a,b)=>a+b,0);
+  }
+  if(known)sum+=pins;totals.push(known?sum:null);
+ }return totals;
+}
+function frameReadingOptions(readings,frame){
+ const map=new Map();for(const r of readings||[]){if(!r||parseFrame(r.mark,frame)===null)continue;const prior=map.get(r.mark);if(!prior||r.error<prior.error)map.set(r.mark,{mark:r.mark,error:r.error})}
+ return [...map.values()].sort((a,b)=>a.error-b.error).slice(0,4);
+}
+function auditScoreboardRow(row){
+ const running=bowlingRunningTotals(row.frames),checks=[];
+ for(let f=0;f<10;f++){const r=row.runningTotals?.[f];if(r?.certain&&Number.isInteger(r.value))checks.push({frame:f,value:r.value})}
+ if(!row.totalUncertain&&Number.isInteger(row.displayedTotal))checks.push({frame:9,value:row.displayedTotal});
+ const mismatches=checks.filter(c=>running[c.frame]!==null&&running[c.frame]!==c.value);
+ return {checks,mismatches,complete:running[9]!==null,verified:checks.filter(c=>c.frame<9).length===9&&checks.some(c=>c.frame===9)&&mismatches.length===0&&running[9]!==null&&!row.uncertain?.some(Boolean)};
+}
+function reconcileScoreboardRow(row){
+ row.uncertain=Array.from({length:10},(_,i)=>!!row.uncertain?.[i]||parseFrame(row.frames?.[i],i)===null);
+ let audit=auditScoreboardRow(row);
+ const options=Array.from({length:10},(_,f)=>frameReadingOptions([{mark:row.frames[f],error:0},...(row.frameAlternatives?.[f]||[])],f));
+ let combinations=1;for(const o of options)combinations*=o.length;
+ if(audit.checks.length>=3&&combinations>1&&combinations<=2048){
+  const solutions=[],marks=[];function visit(f){if(solutions.length>1)return;if(f===10){const totals=bowlingRunningTotals(marks);if(audit.checks.every(c=>totals[c.frame]===c.value))solutions.push([...marks]);return}for(const o of options[f]){marks[f]=o.mark;visit(f+1)}}
+  visit(0);
+  if(solutions.length===1){row.correctedFrames??=[];solutions[0].forEach((mark,f)=>{if(mark!==row.frames[f]){row.frames[f]=mark;row.correctedFrames.push(f)}if(options[f].length>1)row.uncertain[f]=false});}
+ }
+ audit=auditScoreboardRow(row);
+ // Compare increments so one early misread does not mark every later frame.
+ const actual=bowlingRunningTotals(row.frames);
+ for(const c of audit.mismatches){
+  const f=c.frame,previous=f===0?{value:0,certain:true}:row.runningTotals?.[f-1];
+  if(f>0&&previous?.certain&&actual[f-1]!==null&&actual[f]!==null&&actual[f]-actual[f-1]===c.value-previous.value)continue;
+  row.uncertain[f]=true;const rolls=parseFrame(row.frames[f],f);
+  if(f<9&&rolls&&(rolls[0]===10||rolls[0]+rolls[1]===10))for(let j=f+1;j<=Math.min(9,f+2);j++)row.uncertain[j]=true;
+ }
+ if(audit.mismatches.length&&!row.uncertain.some(Boolean))row.uncertain[9]=true;
+ row.audit=auditScoreboardRow(row);
+ row.line='Running totals checked: '+new Set(row.audit.checks.map(c=>c.frame)).size+'/10. '+(row.audit.mismatches.length?'Score mismatch — review highlighted frames.':row.uncertain.some(Boolean)?'Review highlighted frames.':row.audit.verified?'Frames match all readable running totals.':'Some running totals are unreadable; check the photo.');
+ return row;
+}
+function retryQuestionableFrames(data,w,h,row){
+ const audit=auditScoreboardRow(row);
+ const requested=new Set(row.uncertain.map((flag,f)=>flag?f:-1).filter(f=>f>=0));
+ for(const c of audit.mismatches)for(let f=Math.max(0,c.frame-2);f<=c.frame;f++)requested.add(f);
+ for(const f of requested){
+  const crop=row.glyphCrops?.[f];if(!crop)continue;
+  const readings=[...(row.frameAlternatives?.[f]||[])];
+  for(const pad of [0,1])for(const threshold of [90,130,170,205])for(const channel of ['cyan','magenta','blue','light']){
+   const lit=(x,y)=>{const i=(y*w+x)*4,r=data[i],g=data[i+1],b=data[i+2];return channel==='cyan'?g>threshold&&b>threshold&&r<g*.9:channel==='magenta'?r>threshold&&b>threshold&&g<Math.min(r,b)*.9:channel==='blue'?b>threshold&&b-r>30&&b-g>30:r>threshold&&g>threshold&&b<Math.min(r,g)*1.2};
+   const result=readFrameAtThreshold(lit,Math.max(0,crop.x0-pad),Math.min(w,crop.x1+pad),Math.max(0,crop.y0-pad),Math.min(h,crop.y1+pad),w/1338,f);if(result)readings.push(result);
+  }
+  // Re-read an enlarged crop with interpolation, independently of full-image exposure passes.
+  const left=Math.max(0,crop.x0),up=Math.max(0,crop.y0),cw=Math.min(w,crop.x1)-left,ch=Math.min(h,crop.y1)-up;
+  if(cw>0&&ch>0&&cw*ch<100000){
+   const ew=cw*2,eh=ch*2,enlarged=new Uint8ClampedArray(ew*eh*4);
+   for(let y=0;y<eh;y++)for(let x=0;x<ew;x++){
+    const sx=left+x/2,sy=up+y/2,a=Math.floor(sx),b=Math.floor(sy),tx=sx-a,ty=sy-b;
+    for(let k=0;k<3;k++)enlarged[(y*ew+x)*4+k]=data[(b*w+a)*4+k]*(1-tx)*(1-ty)+data[(b*w+Math.min(w-1,a+1))*4+k]*tx*(1-ty)+data[(Math.min(h-1,b+1)*w+a)*4+k]*(1-tx)*ty+data[(Math.min(h-1,b+1)*w+Math.min(w-1,a+1))*4+k]*tx*ty;
+   }
+   for(const threshold of [120,170,205])for(const channel of ['cyan','magenta','blue','light']){
+    const lit=(x,y)=>{const i=(y*ew+x)*4,r=enlarged[i],g=enlarged[i+1],b=enlarged[i+2];return channel==='cyan'?g>threshold&&b>threshold&&r<g*.9:channel==='magenta'?r>threshold&&b>threshold&&g<Math.min(r,b)*.9:channel==='blue'?b>threshold&&b-r>30&&b-g>30:r>threshold&&g>threshold&&b<Math.min(r,g)*1.2};
+    const result=readFrameAtThreshold(lit,0,ew,0,eh,w/1338*2,f);if(result)readings.push(result);
+   }
+  }
+  row.frameAlternatives[f]=frameReadingOptions(readings,f);
+  if(!row.frames[f]&&row.frameAlternatives[f].length===1){row.frames[f]=row.frameAlternatives[f][0].mark;row.uncertain[f]=true;}
+ }return reconcileScoreboardRow(row);
+}
+
 function readBlueBoxScoreboard(data,w,h,expectedRows=0){
  const blue=(x,y)=>{const i=(y*w+x)*4;return (data[i+2]>75&&data[i+2]>data[i]*1.4&&data[i+2]>data[i+1]*1.25)||(data[i+1]>90&&data[i+2]>70&&data[i]<Math.min(data[i+1],data[i+2])*.65)};
  const yellow=(x,y,ratio=1.1,threshold=125)=>{const i=(y*w+x)*4;return data[i]>threshold&&data[i+1]>threshold-5&&data[i+2]<Math.min(data[i],data[i+1])*ratio};
@@ -563,16 +641,19 @@ function readBlueBoxScoreboard(data,w,h,expectedRows=0){
   for(let x=0;x<w;x++){let n=0;for(let y=top;y<bottom;y+=2)if(blue(x,y))n++;if(n>(bottom-top)*.05){if(!runs.length||x>runs.at(-1).at(-1)+1)runs.push([x]);else runs.at(-1).push(x)}}
   const boxes=runs.filter(r=>r.length>w*.045);if(boxes.length!==10)continue;
   const widths=boxes.map(b=>b.length),median=[...widths].sort((a,b)=>a-b)[5];if(widths.some(n=>n<median*.65||n>median*1.5))continue;
-  const frames=[],uncertain=[],frameCrops=[];let total=null;
+  const frames=[],uncertain=[],frameCrops=[],glyphCrops=[],runningTotals=[],frameAlternatives=[];let total=null;
   for(const [f,box] of boxes.entries()){
    const x0=box[0]+2,x1=box.at(-1)-1,y0=top+2,y1=bottom-2;
    const candidates=[125,160,185,210].flatMap(threshold=>[.8,.9,1,1.1,1.2].map(ratio=>readFrameAtThreshold((x,y)=>yellow(x,y,ratio,threshold),x0,x1,y0,y1,w/1338,f))).filter(Boolean).sort((a,b)=>a.error-b.error);
+   glyphCrops.push({x0,x1,y0,y1});frameAlternatives.push(frameReadingOptions(candidates,f));
+   const cumulative=readDisplayedGridTotal(data,w,h,box[0],box.at(-1),bottom,Math.min(h,bottom+(bottom-top)));
+   runningTotals.push({value:cumulative.displayedTotal,certain:!cumulative.totalUncertain});
    const result=candidates[0];frames.push(result?.mark||'');uncertain.push(!result||result.error>.18||result.margin<.025||candidates.some(c=>c.mark!==result.mark));
    frameCrops.push({x:x0/w,y:y0/h,w:(x1-x0)/w,h:(y1-y0)/h});
    if(f===9){const totals=[.8,.9,1,1.1,1.2].map(ratio=>readFrameAtThreshold((x,y)=>yellow(x,y,ratio),x0,x1,bottom+2,Math.min(h,Math.round(bottom+(bottom-top))),w/1338,-1)).filter(Boolean).sort((a,b)=>a.error-b.error);total=totals[0];if(total)total.disputed=totals.some(t=>t.mark!==total.mark);}
   }
   if(frames.filter(Boolean).length<6)continue;
-  rows.push({bowlerId:'',name:'Scoreboard row '+(rows.length+1),line:'Colored frame boxes detected. Assign the bowler and check highlighted frames.',frames,uncertain,frameCrops,displayedTotal:total?Number(total.mark):null,totalUncertain:!total||total.error>.18||!!total.disputed});
+  rows.push(retryQuestionableFrames(data,w,h,{glyphCrops,runningTotals,frameAlternatives,bowlerId:'',name:'Scoreboard row '+(rows.length+1),line:'Colored frame boxes detected. Assign the bowler and check highlighted frames.',frames,uncertain,frameCrops,displayedTotal:total?Number(total.mark):null,totalUncertain:!total||total.error>.18||!!total.disputed}));
  }
  if(!rows.length)return null;
  if(expectedRows&&rows.length!==expectedRows)throw Error('Found '+rows.length+' bowler rows, but '+expectedRows+' were selected.');
@@ -601,7 +682,7 @@ function readDigitalGrid(data,w,h,adjusted=false,expectedRows=0){
  const frameEdges=columns.slice(1,-1),rows=[];
  for(const {top,bottom,inferred} of digitalRowBands(ys,header,columns,lit,w,h)){
   const height=bottom-top;
-  const frames=[],uncertainFrames=[],frameCrops=[];
+  const frames=[],uncertainFrames=[],frameCrops=[],glyphCrops=[],runningTotals=[],frameAlternatives=[];
   for(let f=0;f<10;f++){
    const scale=w/1338,x0=Math.round(frameEdges[f])+Math.max(3,Math.round(5*scale)),x1=Math.round(frameEdges[f+1])-Math.max(3,Math.round(4*scale));
    const y0=Math.round(top)+Math.max(3,Math.round(6*scale)),y1=Math.round(top+height*.43)-Math.max(2,Math.round(3*scale));
@@ -650,9 +731,12 @@ function readDigitalGrid(data,w,h,adjusted=false,expectedRows=0){
     const combined=first&&second?first.mark+second.mark:'';
     if(combined&&parseFrame(combined,f)!==null){mark=combined;lowConfidence=true;}
    }
+   glyphCrops.push({x0,x1,y0,y1});frameAlternatives.push(frameReadingOptions([...candidates,{mark,error:0}],f));
+   const cumulative=readDisplayedGridTotal(data,w,h,frameEdges[f],frameEdges[f+1],top+height*.53,bottom);
+   runningTotals.push({value:cumulative.displayedTotal,certain:!cumulative.totalUncertain});
    frames.push(mark);uncertainFrames.push(inferred||!mark||lowConfidence);frameCrops.push({x:Math.max(0,(frameEdges[f]-5)/w),y:Math.max(0,(top-6)/h),w:Math.min(1,(frameEdges[f+1]-frameEdges[f]+10)/w),h:Math.min(1,(height*.55+12)/h)});
   }
-  rows.push({bowlerId:'',name:'Scoreboard row '+(rows.length+1),line:'Check bowler assignment and highlighted frames on the score sheet.',frames,uncertain:uncertainFrames,frameCrops,...readDisplayedGridTotal(data,w,h,columns.at(-2),columns.at(-1),top,bottom)});
+  rows.push(retryQuestionableFrames(data,w,h,{glyphCrops,runningTotals,frameAlternatives,bowlerId:'',name:'Scoreboard row '+(rows.length+1),line:'Check bowler assignment and highlighted frames on the score sheet.',frames,uncertain:uncertainFrames,frameCrops,...readDisplayedGridTotal(data,w,h,columns.at(-2),columns.at(-1),top,bottom)}));
  }
  if(!rows.length)throw new Error('No bowler rows found in this grid.');
  if(expectedRows&&rows.length!==expectedRows)throw new Error('Found '+rows.length+' bowler rows, but '+expectedRows+' were selected. Include all rows and the bottom border in the photo.');
@@ -693,25 +777,28 @@ function ocrReadingQuality(rows){
  let valid=0,complete=0,certain=0;
  for(const row of rows){let count=0;for(let f=0;f<10;f++)if(parseFrame(row.frames?.[f],f)!==null){valid++;count++;if(!row.uncertain?.[f])certain++;}
  if(count===10&&bowlingScore(row.frames)!==null)complete++;}
- const verified=rows.filter(r=>r.displayedTotal!=null&&!r.totalUncertain&&bowlingScore(r.frames)===r.displayedTotal).length;return {valid,complete,rank:valid*100+complete*10+certain+verified*25,finished:rows.length>0&&complete===rows.length&&certain===rows.length*10};
+ const verified=rows.filter(r=>r.displayedTotal!=null&&!r.totalUncertain&&bowlingScore(r.frames)===r.displayedTotal).length;return {valid,complete,rank:valid*100+complete*10+certain+verified*25+rows.reduce((sum,r)=>sum+(r.audit?.checks.length||0)*10-(r.audit?.mismatches.length||0)*150,0),finished:rows.length>0&&complete===rows.length&&certain===rows.length*10};
 }
 function flagOcrDisagreements(best,readings){
- // Compare row positions only when the detected grid has the same row count.
- return best.rows.map((row,i)=>({...row,uncertain:Array.from({length:10},(_,f)=>!!row.uncertain?.[f]||parseFrame(row.frames?.[f],f)===null||readings.some(rows=>rows.length===best.rows.length&&rows[i].frames?.[f]&&parseFrame(rows[i].frames[f],f)!==null&&rows[i].frames[f]!==row.frames?.[f]))}));
+ return best.rows.map((original,i)=>{
+  const peers=readings.filter(rows=>rows.length===best.rows.length&&Math.abs((rows[i].frameCrops?.[0]?.y??0)-(original.frameCrops?.[0]?.y??0))<.03).map(rows=>rows[i]);
+  const row={...original,frames:[...original.frames],uncertain:Array.from({length:10},(_,f)=>!!original.uncertain?.[f]||peers.some(r=>r.frames?.[f]&&r.frames[f]!==original.frames[f])),frameAlternatives:Array.from({length:10},(_,f)=>frameReadingOptions(peers.flatMap(r=>[...(r.frameAlternatives?.[f]||[]),{mark:r.frames?.[f],error:.2}]),f))};
+  return reconcileScoreboardRow(row);
+ });
 }
 async function findDigitalGridAutomatically(file,token=null){
  const original=await prepareScoreboard(file,false,true);
  const settings=[[0,1,'original colors'],[25,1,'brighter'],[-25,1,'darker'],[0,1.3,'higher contrast'],[25,1.3,'brighter with higher contrast'],[0,.8,'softer contrast'],[50,1,'extra brightness'],[-40,1.5,'darker with higher contrast'],[45,1.6,'stronger exposure recovery']];
  const unique=settings.filter((s,i,a)=>a.findIndex(t=>t[0]===s[0]&&t[1]===s[1])===i);
- let attempts=0,best=null;const readings=[];const fingerprints=new Map();
+ let attempts=0,best=null;const readings=[];const fingerprints=new Map();const started=Date.now();
  const targets=[...new Set([1338,Math.min(1338,original.width),Math.min(1024,original.width)])];
- for(const target of targets){
+ scanAttempts:for(const target of targets){
   const width=target,height=Math.round(original.height*width/original.width),canvas=document.createElement('canvas');
   canvas.width=width;canvas.height=height;
   const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.drawImage(original,0,0,width,height);
   const raw=ctx.getImageData(0,0,width,height).data;
   for(const [brightness,contrast,label] of unique){
-   assertScanActive(token);attempts++;if($('#ocrProgressBar'))$('#ocrProgressBar').style.width=Math.round(attempts/(unique.length*targets.length)*100)+'%';$('#ocrStatus').textContent='Looking for scores… attempt '+attempts+' ('+label+'). Best reading: '+(best?.quality.valid||0)+' frames.';
+   assertScanActive(token);if(best&&Date.now()-started>30000)break scanAttempts;attempts++;if($('#ocrProgressBar'))$('#ocrProgressBar').style.width=Math.round(attempts/(unique.length*targets.length)*100)+'%';$('#ocrStatus').textContent='Looking for scores… attempt '+attempts+' ('+label+'). Best reading: '+(best?.quality.valid||0)+' frames.';
    await new Promise(resolve=>setTimeout(resolve,0));
    const data=brightness===0&&contrast===1?raw:adjustScoreboardPixels(raw,brightness,contrast);
    try{
@@ -719,9 +806,7 @@ async function findDigitalGridAutomatically(file,token=null){
     readings.push(rows);
     if(!best||quality.rank>best.quality.rank)best={rows,width,height,label,brightness,contrast,quality};
     const fingerprint=JSON.stringify(rows.map(r=>r.frames));fingerprints.set(fingerprint,(fingerprints.get(fingerprint)||0)+1);
-    const allComplete=rows.length>0&&quality.complete===rows.length;
-    const verified=allComplete&&rows.every(r=>r.displayedTotal!=null&&!r.totalUncertain&&bowlingScore(r.frames)===r.displayedTotal);
-    if(quality.finished||verified||(allComplete&&fingerprints.get(fingerprint)>=2)){best.rows=flagOcrDisagreements(best,readings);return {...best,attempts};}
+    if(rows.every(r=>r.audit?.verified)&&fingerprints.get(fingerprint)>=2){best.rows=flagOcrDisagreements(best,readings);return {...best,attempts};}
    }catch(error){assertScanActive(token);/* Try the next exposure or size when grid detection fails. */}
   }
  }
@@ -768,7 +853,7 @@ function syncOcrToScoreSheet(){
   if(!row.appliedBowlerId)row.priorDraft=JSON.stringify(bowler);
   bowler.totalOnly=false;delete bowler.manualTotal;bowler.absent=!!row.absent;
   bowler.frames=row.absent?Array(10).fill(''):[...row.frames];
-  bowler.ocrSourceId=ocrResult.sourceId;bowler.ocrFrameCrops=row.frameCrops;bowler.ocrDisplayedTotal=row.totalUncertain?null:(row.displayedTotal??null);
+  bowler.ocrRunningTotals=row.runningTotals;bowler.ocrSourceId=ocrResult.sourceId;bowler.ocrFrameCrops=row.frameCrops;bowler.ocrDisplayedTotal=row.totalUncertain?null:(row.displayedTotal??null);
   bowler.ocrUncertain=row.absent?Array(10).fill(false):row.frames.map((mark,i)=>!!row.uncertain?.[i]||parseFrame(mark,i)===null);
   row.appliedBowlerId=row.bowlerId;row.lastApplied=JSON.stringify(bowler);
  }
@@ -939,16 +1024,16 @@ function chooseScanReview(game){ocrResult=scanResults.get(+game)||null;if(!ocrRe
 function rememberBowlerOrder(){if(isPractice())return;const team=currentTeam();if(!team||!ocrResult)return;const ids=ocrResult.rows.map(r=>r.bowlerId);if(ids.some(id=>!team.bowlers.some(b=>b.id===id))||new Set(ids).size!==ids.length)return toast('Assign each row to a different bowler before remembering its order.');team.ocrOrder=[...ids];persist();toast('Bowler order remembered for this team.')}
 function undoLastScan(){if(!scanUndo||scanUndo.store!==activeStoreKey||scanUndo.teamId!==currentTeam()?.id)return;if(!confirm('Restore the score sheet from before the last scan? Corrections made since that scan will also be undone.'))return;nightDraft=cloneData(scanUndo.draft);scanUndo=null;scanResults.clear();ocrResult=null;$('#ocrDetails').classList.add('hidden');renderScanReviewPicker();renderScoreSheet();$('#undoScanBtn').disabled=true;$('#undoScanBtn').classList.add('hidden');toast('Score sheet restored to before the last scan.')}
 function clearScanReview(){scanResults.clear();ocrResult=null;scanUndo=null;$('#ocrDetails').classList.add('hidden');renderScanReviewPicker();$('#undoScanBtn').disabled=true;$('#undoScanBtn').classList.add('hidden')}
-function verificationText(b){const score=entryScore(b);if(b.absent||b.totalOnly)return '';if(b.ocrDisplayedTotal==null)return b.ocrSourceId?'Scoreboard total unreadable — check the photo.':'';return score===null?'Scoreboard total '+b.ocrDisplayedTotal+' · finish highlighted frames':score===b.ocrDisplayedTotal?'Verified: '+score+' matches scoreboard':'Check total: frames '+score+' / scoreboard '+b.ocrDisplayedTotal;}
+function verificationText(b){const score=entryScore(b);if(b.absent||b.totalOnly)return '';if(b.ocrDisplayedTotal==null)return b.ocrSourceId?'Scoreboard total unreadable — check the photo.':'';return score===null?'Scoreboard total '+b.ocrDisplayedTotal+' · finish highlighted frames':score===b.ocrDisplayedTotal?(b.ocrUncertain?.some(Boolean)?'Final total matches '+score+'; review highlighted frames':'Final total matches '+score):'Check total: frames '+score+' / scoreboard '+b.ocrDisplayedTotal;}
 function verificationMismatch(b){return !b.absent&&!b.totalOnly&&b.ocrDisplayedTotal!=null&&entryScore(b)!==null&&entryScore(b)!==b.ocrDisplayedTotal}
 async function openFrameReview(game,bowlerId,frame){
  const b=nightDraft?.games.find(g=>g.game===game)?.bowlers.find(b=>b.bowlerId===bowlerId);if(!b)return;
- frameReview={draft:nightDraft,game,bowlerId,frame};$('#frameReviewTitle').textContent=b.name+' · Game '+game+' · Frame '+(frame+1);$('#frameReviewInput').value=b.frames[frame]||'';$('#frameReviewStatus').textContent='';$('#frameReviewPhoto').classList.add('hidden');$('#frameReviewNoPhoto').textContent='';$('#frameReviewDialog').showModal();
+ frameReview={draft:nightDraft,game,bowlerId,frame};$('#frameReviewTitle').textContent=b.name+' · Game '+game+' · Frame '+(frame+1);$('#frameReviewInput').value=b.frames[frame]||'';const observed=b.ocrRunningTotals?.[frame],calculated=bowlingRunningTotals(b.frames)[frame];$('#frameReviewStatus').textContent=observed?.certain?'Frame '+(frame+1)+' running total: scoreboard '+observed.value+'; entered frames '+(calculated??'incomplete')+'.':'';$('#frameReviewPhoto').classList.add('hidden');$('#frameReviewNoPhoto').textContent='';$('#frameReviewDialog').showModal();
  const source=scanSources.get(b.ocrSourceId),bounds=b.ocrFrameCrops?.[frame];if(!source){$('#frameReviewNoPhoto').textContent='The draft was restored without its photo. Upload and scan the original photo again, or correct the frame from your records.';return}
  try{const img=new Image();await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=reject;img.src=source.url});if(frameReview?.draft!==nightDraft||frameReview?.frame!==frame||frameReview?.bowlerId!==bowlerId)return;const canvas=$('#frameReviewPhoto'),ctx=canvas.getContext('2d');const crop=bounds||{x:0,y:0,w:1,h:1};const x=Math.max(0,crop.x),y=Math.max(0,crop.y),w=Math.min(crop.w,1-x),h=Math.min(crop.h,1-y);canvas.width=800;canvas.height=Math.min(600,Math.max(180,Math.round(800*h*img.naturalHeight/(w*img.naturalWidth))));ctx.drawImage(img,x*img.naturalWidth,y*img.naturalHeight,w*img.naturalWidth,h*img.naturalHeight,0,0,canvas.width,canvas.height);canvas.classList.remove('hidden');if(!bounds)$('#frameReviewNoPhoto').textContent='Standard OCR: full photo shown. Locate the selected frame.';}catch{$('#frameReviewNoPhoto').textContent='The scan photo could not be opened.';}
 }
 function saveFrameReview(){if(!frameReview||frameReview.draft!==nightDraft)return;const {game,bowlerId,frame}=frameReview,mark=normalizeFrame($('#frameReviewInput').value);if(parseFrame(mark,frame)===null){$('#frameReviewStatus').textContent='Enter a valid frame mark, such as 9/, 8-, or X. The tenth frame may need a bonus roll.';return}const b=nightDraft.games.find(g=>g.game===game)?.bowlers.find(b=>b.bowlerId===bowlerId);if(!b)return;b.totalOnly=false;delete b.manualTotal;b.frames[frame]=mark;b.ocrUncertain??=Array(10).fill(false);b.ocrUncertain[frame]=false;updateOcrFromScoreSheet(b,game,frame);$('#frameReviewDialog').close();frameReview=null;renderScoreSheet()}
-function gridWorkerSource(){return 'const TOTAL_FONT='+JSON.stringify(TOTAL_FONT)+';const GRID_FONT='+JSON.stringify(GRID_FONT)+';const SPLIT_FONT='+JSON.stringify(SPLIT_FONT)+';'+[normalizeFrame,parseFrame,bowlingScore,straightenDigitalGrid,highlightedRollFeatures,readSplitFirstRoll,readSplitSecondRoll,distinguishFiveAndSix,readFrameAtThreshold,readDisplayedGridTotal,digitalRowBands,readBlueBoxScoreboard,readDigitalGrid].map(fn=>fn.toString()).join('\n')+'\nonmessage=e=>{try{postMessage({rows:readDigitalGrid(new Uint8ClampedArray(e.data.data),e.data.w,e.data.h,false,e.data.expectedRows)})}catch(error){postMessage({error:error.message})}}';}
+function gridWorkerSource(){return 'const TOTAL_FONT='+JSON.stringify(TOTAL_FONT)+';const GRID_FONT='+JSON.stringify(GRID_FONT)+';const SPLIT_FONT='+JSON.stringify(SPLIT_FONT)+';'+[normalizeFrame,parseFrame,bowlingScore,straightenDigitalGrid,highlightedRollFeatures,readSplitFirstRoll,readSplitSecondRoll,distinguishFiveAndSix,readFrameAtThreshold,readDisplayedGridTotal,digitalRowBands,bowlingRunningTotals,frameReadingOptions,auditScoreboardRow,reconcileScoreboardRow,retryQuestionableFrames,readBlueBoxScoreboard,readDigitalGrid].map(fn=>fn.toString()).join('\n')+'\nonmessage=e=>{try{postMessage({rows:readDigitalGrid(new Uint8ClampedArray(e.data.data),e.data.w,e.data.h,false,e.data.expectedRows)})}catch(error){postMessage({error:error.message})}}';}
 async function recognizeGridAsync(data,w,h,token){assertScanActive(token);if(typeof Worker==='undefined')return readDigitalGrid(data,w,h,false,token.expectedRows);if(!token.gridWorker){const url=URL.createObjectURL(new Blob([gridWorkerSource()],{type:'text/javascript'}));token.gridWorker=new Worker(url);URL.revokeObjectURL(url)}return new Promise((resolve,reject)=>{token.cancelPending=()=>reject(new Error('SCAN_CANCELLED'));token.gridWorker.onmessage=e=>{token.cancelPending=null;e.data.error?reject(new Error(e.data.error)):resolve(e.data.rows)};token.gridWorker.onerror=()=>{token.cancelPending=null;reject(new Error('The scan worker could not start. Reload the page and retry.'))};const copy=new Uint8ClampedArray(data);token.gridWorker.postMessage({data:copy.buffer,w,h,expectedRows:token.expectedRows},[copy.buffer])})}
 async function runScanBatch(){
  if(scanSession)return;const team=currentTeam();if(!scanFiles.length)return toast('Choose one to three scoreboard photos.');if(!team?.bowlers.length)return toast('Choose a team and add its bowlers first.');if(new Set(scanFiles.map(i=>i.game)).size!==scanFiles.length)return toast('Assign a different game number to each photo.');if($('#ocrMode').value==='standard'&&!window.Tesseract)return toast('The OCR component has not loaded. Connect and reload the page.');ensureDraft();
@@ -958,7 +1043,7 @@ async function runScanBatch(){
    if(grid)result=await findDigitalGridAutomatically(item.file,token);
    else{if(!token.textWorker)token.textWorker=await Tesseract.createWorker('eng',1,{logger:m=>{if(scanSession===token&&!token.cancelled)$('#ocrStatus').textContent='Game '+item.game+' · '+m.status+' '+Math.round((m.progress||0)*100)+'%'}});assertScanActive(token);result=await readStandardScoresAutomatically(token.textWorker,item.file,token);}
    assertScanActive(token);showScanSource(item);ocrResult={text:grid?'Game '+item.game+': '+result.quality.valid+' readable frames after '+result.attempts+' attempts. Check assignments and total verification.':result.text,rows:result.rows,store:activeStoreKey,teamId:team.id,game:item.game,sourceId:item.sourceId,grid};scanResults.set(item.game,ocrResult);$('#ocrText').textContent=ocrResult.text;renderOcrReview(ocrResult.rows,grid);renderScanReviewPicker();$('#ocrDetails').classList.remove('hidden');$('#ocrDetails').open=true;openScoreGame(item.game);completed++;
-  }$('#ocrStatus').textContent='Finished '+completed+' photo'+(completed===1?'':'s')+'. Scores are on the sheet. Check amber frames, bowler assignments, and scoreboard totals.';
+  }$('#ocrStatus').textContent='Finished '+completed+' photo'+(completed===1?'':'s')+'. Running-total checks and targeted retries are complete. Review amber frames and bowler assignments.';
  }catch(error){if(error.message==='SCAN_CANCELLED'||token.cancelled)$('#ocrStatus').textContent='Scan cancelled. '+completed+' completed game(s) kept on the sheet. Undo Last Scan restores the previous sheet.';else{$('#ocrStatus').textContent='Scan stopped: '+error.message+'. '+completed+' completed game(s) kept. Use Undo Last Scan to restore the previous sheet.';console.error(error)}}finally{token.gridWorker?.terminate();if(token.textWorker)await token.textWorker.terminate().catch(()=>{});scanSession=null;setScanBusy(false)}
 }
 
