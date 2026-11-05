@@ -123,7 +123,7 @@ function renderSaveSyncStatus(){
  $('#saveSyncStatus').textContent='Saved games: '+(labels[s.state]||labels.device);$('#saveSyncStatus').title=s.message;$('#saveSyncStatus').dataset.status=s.state;
 }
 
-function resetScanContext(){clearScanReview();scanFiles=[];$('#scoreboardImage').value='';$('#scanFileList').innerHTML='';$('#imagePreviewWrap').classList.add('hidden');$('#scanPhotoPreview').classList.add('hidden');$('#singleGameLabel').classList.remove('hidden');$('#scanFileList').classList.remove('hidden');$('#runOcrBtn').disabled=true;$('#ocrStatus').textContent=''}
+function resetScanContext(){clearScanReview();scanFiles=[];$('#scoreboardImage').value='';$('#scanFileList').innerHTML='';$('#imagePreviewWrap').classList.add('hidden');$('#scanPhotoPreview').classList.add('hidden');$('#singleGameLabel').classList.remove('hidden');$('#scanFileList').classList.remove('hidden');$('#runOcrBtn').disabled=true;$('#ocrStatus').textContent='';pendingPhotoGame=null;if($('#gamePhotoInput'))$('#gamePhotoInput').value='';updateScanQueue()}
 function changeSession(){if(scanSession)return;ensureDraft();renderNightHeader();renderScoreSheet()}
 function renderSessionControls(){const team=currentTeam(),select=$('#practiceBowler'),selected=select.value;select.innerHTML=optionHtml(team?.bowlers||[],selected,'Choose bowler');if(!team?.bowlers.some(b=>b.id===selected))select.value=team?.bowlers[0]?.id||'';$('#practiceBowlerLabel').classList.toggle('hidden',!isPractice());$('#practiceHelp').classList.toggle('hidden',!isPractice());$('#nightEyebrow').textContent=isPractice()?'PRACTICE SESSION':'LEAGUE NIGHT';$('#nightDateLabel').textContent=isPractice()?'Practice date':'League night date';$('#saveNightBtn').textContent=isPractice()?'Save Practice Games':'Save 3-Game League Night';$('#rememberOrderBtn').classList.toggle('hidden',isPractice());renderPracticeRow()}
 function findSavedSession(team,id){return [...(team?.nights||[]),...(team?.practiceSessions||[])].find(n=>n.id===id)}
@@ -1009,14 +1009,38 @@ let scanFiles=[], scanResults=new Map(), scanSources=new Map(), scanUndo=null, s
 const cloneData=value=>JSON.parse(JSON.stringify(value));
 function assertScanActive(token){if(token&&(token.cancelled||token.store!==activeStoreKey||token.teamId!==currentTeam()?.id||token.draft!==nightDraft))throw new Error('SCAN_CANCELLED')}
 function cancelScan(){if(!scanSession)return;scanSession.cancelled=true;scanSession.cancelPending?.();scanSession.gridWorker?.terminate();scanSession.textWorker?.terminate().catch(()=>{});$('#ocrStatus').textContent='Cancelling scan…'}
-function setScanBusy(busy){for(const id of ['runOcrBtn','scoreboardImage','ocrMode','ocrGame','saveNightBtn','clearNightBtn','sessionType','practiceBowler','practiceRow','scoreboardRowCount']){const control=$('#'+id);if(control)control.disabled=busy;}$$('[data-scan-file]').forEach(el=>el.disabled=busy);$('#cancelScanBtn').classList.toggle('hidden',!busy);$('#ocrProgress').classList.toggle('hidden',!busy);$('#undoScanBtn').disabled=busy||!scanUndo||scanUndo.store!==activeStoreKey||scanUndo.teamId!==currentTeam()?.id;$('#undoScanBtn').classList.toggle('hidden',!scanUndo);if(!busy)$('#runOcrBtn').disabled=!scanFiles.length;}
+function setScanBusy(busy){for(const id of ['runOcrBtn','scoreboardImage','ocrMode','ocrGame','saveNightBtn','clearNightBtn','sessionType','practiceBowler','practiceRow','scoreboardRowCount']){const control=$('#'+id);if(control)control.disabled=busy;}$$('[data-scan-file]').forEach(el=>el.disabled=busy);$('#cancelScanBtn').classList.toggle('hidden',!busy);$('#ocrProgress').classList.toggle('hidden',!busy);$('#undoScanBtn').disabled=busy||!scanUndo||scanUndo.store!==activeStoreKey||scanUndo.teamId!==currentTeam()?.id;$('#undoScanBtn').classList.toggle('hidden',!scanUndo);updateScanQueue();if($('#gamePhotoInput'))$('#gamePhotoInput').disabled=busy;}
+
+let pendingPhotoGame=null;
+function updateScanQueue(){
+ const count=scanFiles.length,unique=new Set(scanFiles.map(i=>i.game)).size===count;if(count===1)$('#ocrGame').value=String(scanFiles[0].game);
+ $('#runOcrBtn').disabled=!!scanSession||!count||!unique;
+ $('#runOcrBtn').textContent=count===3?'Scan All 3 Games':count>1?'Scan '+count+' Games':'Scan Photos';
+ $('#singleGameLabel').classList.toggle('hidden',count>1);
+ $('#scanFileList').classList.toggle('hidden',!count);
+ $('#scanFileList').innerHTML=scanFiles.map((item,i)=>'<div class="queued-photo"><label>'+esc(item.file.name)+'<select data-scan-file="'+i+'" aria-label="Game number for '+esc(item.file.name)+'">'+[1,2,3].map(g=>'<option value="'+g+'" '+(g===item.game?'selected':'')+'>Game '+g+'</option>').join('')+'</select></label><div class="row"><button type="button" class="ghost" data-preview-scan="'+i+'">View photo</button><button type="button" class="ghost" data-remove-scan="'+i+'">Remove</button></div><p class="small" role="status">'+esc(item.status||'Ready to scan')+'</p></div>').join('');
+ $$('[data-scan-file]').forEach(el=>el.onchange=()=>{scanFiles[+el.dataset.scanFile].game=+el.value;updateScanQueue()});
+ $$('[data-preview-scan]').forEach(el=>el.onclick=()=>{showScanSource(scanFiles[+el.dataset.previewScan]);$('#scanPhotoPreview').open=true});
+ $$('[data-remove-scan]').forEach(el=>el.onclick=()=>{if(scanSession)return;scanFiles.splice(+el.dataset.removeScan,1);updateScanQueue()});
+ $$('[data-pick-game]').forEach(el=>{const game=+el.dataset.pickGame,item=scanFiles.find(i=>i.game===game);el.textContent='Game '+game+' · '+(item?'Change photo':'Add photo');el.setAttribute('aria-label',(item?'Change':'Add')+' photo for Game '+game);});
+ const summary=$('#fullNightStatus');if(summary)summary.textContent=!unique?'Assign a different game number to each photo.':count===3?'All 3 games are ready. Confirm the game numbers, then scan once.':count+' of 3 game photos selected. You can scan fewer than three.';
+ $$('[data-scan-file],[data-preview-scan],[data-remove-scan],[data-pick-game]').forEach(el=>el.disabled=!!scanSession);
+ if(!count){$('#imagePreviewWrap').classList.add('hidden');$('#scanPhotoPreview').classList.add('hidden')}
+}
+function addPhotoForGame(file,game){
+ if(scanSession||!file||![1,2,3].includes(game))return;
+ const item={file,game,sourceId:uid()},index=scanFiles.findIndex(i=>i.game===game);
+ if(index>=0)scanFiles[index]=item;else if(scanFiles.length<3)scanFiles.push(item);else return toast('Remove a photo before adding another.');
+ scanFiles.sort((a,b)=>a.game-b.game);updateScanQueue();showScanSource(item);
+ $('#ocrStatus').textContent='Game '+game+' photo added. Add the other games, then scan them together.';
+}
 function selectScanFiles(){
  if(scanSession)return;
- const files=[...$('#scoreboardImage').files];$('#runOcrBtn').disabled=!files.length||files.length>3;$('#singleGameLabel').classList.toggle('hidden',files.length>1);$('#scanFileList').classList.toggle('hidden',files.length<2);if(files.length>3){$('#scoreboardImage').value='';scanFiles=[];$('#scanFileList').innerHTML='';toast('Choose up to three photos at a time.');return}
- scanFiles=files.map((file,i)=>({file,game:files.length===1?+$('#ocrGame').value:i+1,sourceId:uid()}));
- $('#scanFileList').innerHTML=scanFiles.map((item,i)=>'<label>'+esc(item.file.name)+'<select data-scan-file="'+i+'">'+[1,2,3].map(g=>'<option value="'+g+'" '+(g===item.game?'selected':'')+'>Game '+g+'</option>').join('')+'</select></label>').join('');
- $$('[data-scan-file]').forEach(el=>el.onchange=()=>scanFiles[+el.dataset.scanFile].game=+el.value);
- if(scanFiles.length){showScanSource(scanFiles[0]);$('#ocrStatus').textContent='Check the game number for each photo, then read the scoreboard.';}
+ const files=[...$('#scoreboardImage').files];if(!files.length)return;
+ if(files.length>3){$('#scoreboardImage').value='';toast('Choose up to three photos. Your current photos are still selected.');return}
+ if(files.length===1){addPhotoForGame(files[0],+$('#ocrGame').value);return}
+ scanFiles=files.map((file,i)=>({file,game:i+1,sourceId:uid()}));updateScanQueue();showScanSource(scanFiles[0]);
+ $('#ocrStatus').textContent='Check the game number for each photo, then scan all selected games.';
 }
 function showScanSource(item){let source=scanSources.get(item.sourceId);if(!source){source={url:URL.createObjectURL(item.file),file:item.file};scanSources.set(item.sourceId,source)}$('#imagePreview').src=source.url;$('#imagePreviewWrap').classList.remove('hidden');$('#scanPhotoPreview').classList.remove('hidden')}
 function renderScanReviewPicker(){const selected=ocrResult?.game;$('#ocrReviewGame').innerHTML=[...scanResults.keys()].sort().map(g=>'<option value="'+g+'" '+(g===selected?'selected':'')+'>Review Game '+g+'</option>').join('');$('#scanReviewControls').classList.toggle('hidden',!scanResults.size)}
@@ -1038,12 +1062,13 @@ async function recognizeGridAsync(data,w,h,token){assertScanActive(token);if(typ
 async function runScanBatch(){
  if(scanSession)return;const team=currentTeam();if(!scanFiles.length)return toast('Choose one to three scoreboard photos.');if(!team?.bowlers.length)return toast('Choose a team and add its bowlers first.');if(new Set(scanFiles.map(i=>i.game)).size!==scanFiles.length)return toast('Assign a different game number to each photo.');if($('#ocrMode').value==='standard'&&!window.Tesseract)return toast('The OCR component has not loaded. Connect and reload the page.');ensureDraft();
  const targets=new Set(scanFiles.map(i=>i.game));if(nightDraft.games.some(g=>targets.has(g.game)&&g.bowlers.some(b=>b.absent||b.totalOnly||b.frames.some(Boolean)))&&!confirm('Replace scanned bowlers in the selected games? You can use Undo Last Scan afterwards.'))return;
- scanUndo={store:activeStoreKey,teamId:team.id,draft:cloneData(nightDraft)};const token={store:activeStoreKey,teamId:team.id,draft:nightDraft,expectedRows:+$('#scoreboardRowCount').value||0,cancelled:false};scanSession=token;setScanBusy(true);let completed=0;
- try{for(const item of [...scanFiles]){assertScanActive(token);$('#ocrStatus').textContent='Reading Game '+item.game+'…';const grid=$('#ocrMode').value==='digital';let result;
+ scanUndo={store:activeStoreKey,teamId:team.id,draft:cloneData(nightDraft)};const token={store:activeStoreKey,teamId:team.id,draft:nightDraft,expectedRows:+$('#scoreboardRowCount').value||0,cancelled:false};scanSession=token;setScanBusy(true);let completed=0;const failures=[];
+ try{for(const item of [...scanFiles].sort((a,b)=>a.game-b.game)){try{item.status='Scanning…';updateScanQueue();assertScanActive(token);$('#ocrStatus').textContent='Reading Game '+item.game+'…';const grid=$('#ocrMode').value==='digital';let result;
    if(grid)result=await findDigitalGridAutomatically(item.file,token);
    else{if(!token.textWorker)token.textWorker=await Tesseract.createWorker('eng',1,{logger:m=>{if(scanSession===token&&!token.cancelled)$('#ocrStatus').textContent='Game '+item.game+' · '+m.status+' '+Math.round((m.progress||0)*100)+'%'}});assertScanActive(token);result=await readStandardScoresAutomatically(token.textWorker,item.file,token);}
-   assertScanActive(token);showScanSource(item);ocrResult={text:grid?'Game '+item.game+': '+result.quality.valid+' readable frames after '+result.attempts+' attempts. Check assignments and total verification.':result.text,rows:result.rows,store:activeStoreKey,teamId:team.id,game:item.game,sourceId:item.sourceId,grid};scanResults.set(item.game,ocrResult);$('#ocrText').textContent=ocrResult.text;renderOcrReview(ocrResult.rows,grid);renderScanReviewPicker();$('#ocrDetails').classList.remove('hidden');$('#ocrDetails').open=true;openScoreGame(item.game);completed++;
-  }$('#ocrStatus').textContent='Finished '+completed+' photo'+(completed===1?'':'s')+'. Running-total checks and targeted retries are complete. Review amber frames and bowler assignments.';
+   assertScanActive(token);showScanSource(item);ocrResult={text:grid?'Game '+item.game+': '+result.quality.valid+' readable frames after '+result.attempts+' attempts. Check assignments and total verification.':result.text,rows:result.rows,store:activeStoreKey,teamId:team.id,game:item.game,sourceId:item.sourceId,grid};scanResults.set(item.game,ocrResult);$('#ocrText').textContent=ocrResult.text;renderOcrReview(ocrResult.rows,grid);renderScanReviewPicker();$('#ocrDetails').classList.remove('hidden');$('#ocrDetails').open=true;openScoreGame(item.game);completed++;item.status='Scanned · check highlighted frames';updateScanQueue();
+   }catch(error){assertScanActive(token);failures.push(item.game);item.status='Could not scan: '+(error.message||'Try another photo');updateScanQueue();}
+  }$('#ocrStatus').textContent='Finished '+completed+' photo'+(completed===1?'':'s')+'. '+(failures.length?'Game '+failures.join(', ')+' could not be read. Replace those photos and try again. ':'')+'Review amber frames and bowler assignments.';
  }catch(error){if(error.message==='SCAN_CANCELLED'||token.cancelled)$('#ocrStatus').textContent='Scan cancelled. '+completed+' completed game(s) kept on the sheet. Undo Last Scan restores the previous sheet.';else{$('#ocrStatus').textContent='Scan stopped: '+error.message+'. '+completed+' completed game(s) kept. Use Undo Last Scan to restore the previous sheet.';console.error(error)}}finally{token.gridWorker?.terminate();if(token.textWorker)await token.textWorker.terminate().catch(()=>{});scanSession=null;setScanBusy(false)}
 }
 
@@ -1149,6 +1174,9 @@ $('#downloadBowlerPdfBtn').onclick=downloadBowlerPdf;
 $('#shareBowlerPdfBtn').onclick=shareBowlerPdf;
 $('#addSeasonBtn').onclick=addSeason;$('#addLeagueBtn').onclick=addLeague;$('#addTeamBtn').onclick=addTeam;$('#addBowlerBtn').onclick=addBowler;$('#saveNightBtn').onclick=saveNight;$('#clearNightBtn').onclick=clearNight;$('#runOcrBtn').onclick=runOcr;$('#exportBtn').onclick=exportBackup;$('#importBtn').onclick=importBackup;
 $('#scoreboardImage').onchange=selectScanFiles;
+$$('[data-pick-game]').forEach(button=>button.onclick=()=>{if(scanSession)return;pendingPhotoGame=+button.dataset.pickGame;$('#gamePhotoInput').value='';$('#gamePhotoInput').click()});
+$('#gamePhotoInput')?.addEventListener('change',()=>{const file=$('#gamePhotoInput').files[0];if(file&&pendingPhotoGame)addPhotoForGame(file,pendingPhotoGame);pendingPhotoGame=null;$('#gamePhotoInput').value='';});
+
 $('#ocrGame').onchange=()=>{if(scanFiles.length===1){scanFiles[0].game=+$('#ocrGame').value;const select=$('[data-scan-file="0"]');if(select)select.value=$('#ocrGame').value}};
 $('#cancelScanBtn').onclick=cancelScan;$('#undoScanBtn').onclick=undoLastScan;$('#ocrReviewGame').onchange=()=>chooseScanReview($('#ocrReviewGame').value);$('#rememberOrderBtn').onclick=rememberBowlerOrder;$('#handicapForm').onsubmit=saveHandicapSettings;$('#saveFrameReview').onclick=saveFrameReview;$('#closeFrameReview').onclick=()=>{$('#frameReviewDialog').close();frameReview=null};$('#frameReviewDialog').addEventListener('cancel',()=>frameReview=null);
 $('#saveScoreChanges').onclick=saveScoreChanges;$('#cancelScoreChanges').onclick=()=>closeSavedScoreEditor();$('#savedScoreDialog').addEventListener('cancel',event=>{event.preventDefault();closeSavedScoreEditor()});
@@ -1194,6 +1222,7 @@ restoreDrafts();ensureInitialStatsSelection();renderAll();renderSaveSyncStatus()
 
 
 let progressResizeTimer;window.addEventListener('resize',()=>{clearTimeout(progressResizeTimer);progressResizeTimer=setTimeout(renderBowlerProgress,120)});
+
 
 
 

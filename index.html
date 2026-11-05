@@ -4,12 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#087978" />
-  <title>StrikeScan 1.5.0</title>
-  <meta name="application-name" content="StrikeScan 1.5.0" />
-  <meta name="application-version" content="1.5.0" />
+  <title>StrikeScan 1.5.1</title>
+  <meta name="application-name" content="StrikeScan 1.5.1" />
+  <meta name="application-version" content="1.5.1" />
   <link rel="icon" type="image/svg+xml" sizes="any" href="ball-pin.svg?v=20261002-icon1" />
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="styles.css?v=1.5.0" />
+  <link rel="stylesheet" href="styles.css?v=1.5.1" />
 </head>
 <body>
   <header class="topbar graphic-topbar">
@@ -144,8 +144,9 @@
 
       <div class="card ocr-card">
         <h2>2 · Add photos</h2>
-        <p class="muted small">Choose up to 3 scoreboard photos, then scan.</p>
+        <p class="muted small">Scan a full league night: choose your Game 1, 2, and 3 photos together, then tap Scan All 3 Games. Single-game scanning also works.</p>
         <label class="photo-picker">Choose photos or take a picture<input id="scoreboardImage" type="file" accept="image/*" aria-label="Choose up to three scoreboard photos" multiple /></label>
+        <details id="fullNightPicker" class="scan-disclosure"><summary>Scan all 3 games at the end of the night</summary><p class="muted small">Select all three photos above, or add one photo for each game below. Confirm the game numbers before scanning.</p><div class="night-photo-slots"><button type="button" class="ghost" data-pick-game="1">Game 1 · Add photo</button><button type="button" class="ghost" data-pick-game="2">Game 2 · Add photo</button><button type="button" class="ghost" data-pick-game="3">Game 3 · Add photo</button></div><input id="gamePhotoInput" type="file" accept="image/*" class="hidden" aria-label="Choose a game photo"><p id="fullNightStatus" class="small" role="status">0 of 3 game photos selected.</p></details>
         <label id="singleGameLabel">Game in this photo<select id="ocrGame"><option value="1">Game 1</option><option value="2">Game 2</option><option value="3">Game 3</option></select></label>
         <div id="scanFileList" class="scan-file-list"></div>
         <details id="scanOptions" class="scan-disclosure">
@@ -260,7 +261,7 @@
         </div>
       </div>
     </section>
-    <footer style="text-align:center;margin-top:1rem;padding:.8rem;background:#fff9ee;border-radius:10px;color:#452f58"><small id="appVersion">StrikeScan 1.5.0</small></footer>
+    <footer style="text-align:center;margin-top:1rem;padding:.8rem;background:#fff9ee;border-radius:10px;color:#452f58"><small id="appVersion">StrikeScan 1.5.1</small></footer>
   </main>
 
 
@@ -289,10 +290,11 @@
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script src="vendor/jspdf.umd.min.js"></script>
   <script src="pdf-header.js?v=20261003-leopard2"></script>
-  <script src="app.js?v=1.5.0"></script>
-  <script type="module" src="cloud-sync.js?v=1.5.0"></script>
+  <script src="app.js?v=1.5.1"></script>
+  <script type="module" src="cloud-sync.js?v=1.5.1"></script>
 </body>
 </html>
+
 
 
 
